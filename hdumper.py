@@ -64,15 +64,15 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
             # Add event selection making sure that the "base" selection is applied everywhere
             event_selection = f"{selections['base']}{selections[selection_name]}" if not "base" in selection_name else f"{selections[selection_name]}"
             print(f"Applying selection: {event_selection} -> Producing output file: {output_file}")
-            print(f"Event weight: {weight}")
             df_selected = df.Filter(event_selection)
 
             # If weight is a complex expression, define it as a new column
+            weight_column = "weight_column"
             if not "data" in infile:
-                weight_column = "weight_column"
+                print(f"Event weight: {weight}")
                 df_selected = df_selected.Define(weight_column, weight)
             else: # Keep the weight 1 for collision data
-                weight_column = "1"
+                df_selected = df_selected.Define(weight_column, "1")
 
             # Create histograms for each branch
             for hist_config in hist_configs:
@@ -117,6 +117,7 @@ def assign_event_weight(year, infile):
 
     Parameters:
     - year: Data taking year.
+    - infile: Input file.
     """
     weight = "1"
     if year == 2018:
