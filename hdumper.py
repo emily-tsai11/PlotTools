@@ -2,6 +2,7 @@ import ROOT
 import argparse
 import glob
 import csv
+import os
 
 ROOT.ROOT.EnableImplicitMT()
 
@@ -63,6 +64,8 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
 
             # Add event selection making sure that the "base" selection is applied everywhere
             event_selection = f"{selections['base']}{selections[selection_name]}" if not "base" in selection_name else f"{selections[selection_name]}"
+            if "singlee" in infile:
+                event_selection += " && passTrigMu==0" # Remove from the electron channel the events that fired the muon trigger. Could choose to do vice versa as well.
             print(f"Applying selection: {event_selection} -> Producing output file: {output_file}")
             df_selected = df.Filter(event_selection)
 
@@ -129,6 +132,38 @@ def assign_event_weight(year, infile):
     
     return weight
 
+def prepare_output(output_dir, input_files):
+    """
+    Prepare the output file names based on the input file names.
+
+    Parameters:
+    - output_dir: Output directory for the new ROOT files.
+    - input_files: List of input ROOT files.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    return [
+        f"{output_dir}h_{input_file.split('/')[-1].replace('_tree.root','.root')}"
+        for input_file in input_files
+    ]
+
+def merge_files(directory, input_files, output_file):
+    """
+    Merges multiple ROOT files into a single ROOT file.
+
+    Parameters:
+    - directory: Directory where the ROOT files are located.
+    - input_files: List of input ROOT files.
+    - output_file: Output ROOT file.
+    """
+    if not all([os.path.exists(directory+'/'+infile) for infile in input_files]):
+        print(f"Input files {input_files} not found in directory: {directory}")
+        return
+    
+    hadd_command = f"hadd -f {directory}/{output_file} {' '.join([directory+'/'+infile for infile in input_files])}"
+    os.system(hadd_command)
+    rm_command = f"rm {' '.join([directory+'/'+infile for infile in input_files])}"
+    os.system(rm_command)
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process ROOT TTrees into TH1D histograms.")
@@ -148,13 +183,7 @@ if __name__ == "__main__":
         input_files = glob.glob(f"{input_dir}*.root")
 
     # Prepare list of output files based on the name of the input files
-    output_files = [
-        f"{args.output_dir}h_{input_file.split('/')[-1].replace('_tree.root','.root')}"
-        for input_file in input_files
-    ]
-
-    # Assign weights to simulated events
-    #weight = assign_event_weight(args.year, input_file)
+    output_files = prepare_output(args.output_dir, input_files)
 
     # Prepare histogram configurations for each branch
     hist_configs = read_csv(args.input_csv)
@@ -165,6 +194,16 @@ if __name__ == "__main__":
                  "ttcc" : " && genEventClassifier==6 && wcb==0",
                  "ttcj" : " && (genEventClassifier==4 || genEventClassifier==5) && wcb==0",
                  "ttLF" : " && tt_category==0 && higgs_decay==0 && wcb==0"
-                 }
+    }
 
     process_trees(input_files, output_files, args.tree_name, hist_configs, args.year, selections)
+
+    # Merge some of the output files
+    ttV_list = ["h_ttW.root", "h_ttZ.root"]
+    merge_files(args.output_dir, ttV_list, "h_ttV.root")
+    ttH_list = ["h_ttHbb.root", "h_ttHcc.root"]
+    merge_files(args.output_dir, ttH_list, "h_ttH.root")
+    ttbb_list = ["h_ttbb-4f_ttbb.root", "h_ttbb-dps.root"]
+    merge_files(args.output_dir, ttbb_list, "h_ttbb-withDPS.root")
+    data_list = ["h_singlee.root", "h_singlemu.root"]
+    merge_files(args.output_dir, data_list, "h_Data.root")
