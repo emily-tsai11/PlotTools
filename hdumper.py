@@ -175,6 +175,8 @@ if __name__ == "__main__":
     parser.add_argument("--xmax", type=float, required=False, help="Maximum value for the histograms.")
     parser.add_argument("--input_csv", type=str, required=True, help="The csv file to read variables and ranges from.")
     parser.add_argument("--year", type=int, required=True, help="Data taking year.")
+    parser.add_argument("--electron", nargs="?", const=1, type=bool, default=False, required=False, help="Process electron channel only.")
+    parser.add_argument("--muon", nargs="?", const=1, type=bool, default=False, required=False, help="Process muon channel only.")
 
     args = parser.parse_args()
 
@@ -195,6 +197,12 @@ if __name__ == "__main__":
                  "ttcj" : " && (genEventClassifier==4 || genEventClassifier==5) && wcb==0",
                  "ttLF" : " && tt_category==0 && higgs_decay==0 && wcb==0"
     }
+
+    # Apply trigger selection to separate channels if requested
+    if args.electron:
+        selections["base"] += " && passTrigEl"
+    if args.muon:
+        selections["base"] += " && passTrigMu"
 
     process_trees(input_files, output_files, args.tree_name, hist_configs, args.year, selections)
 
