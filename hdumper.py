@@ -85,6 +85,10 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 xmax = float(hist_config['xmax'])
                 print(f"Creating histogram for branch: {branch_name}")
                 # Create histogram
+                # If branch name does not exist in the TTree, create a new column
+                if not branch_name in df_selected.GetColumnNames():
+                    df_selected = df_selected.Define("fractional_score", "score_tt_Wcb / (score_tt_Wcb + score_ttbb + score_ttbj + score_ttLF)")
+                    branch_name = "fractional_score"
                 hist = df_selected.Histo1D((f"h_{branch_name}", f"Histogram of {branch_name}", nbins, xmin, xmax), branch_name, weight_column)
                 # Write histogram to output file
                 hist.Write()
@@ -95,7 +99,6 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
         input_file.Close()
 
         print(f"Saved histograms to: {outfile}\n")
-
 
 def read_csv(csv_file):
     """
@@ -124,11 +127,11 @@ def assign_event_weight(year, infile):
     """
     weight = "1"
     if year == 2018:
-        weight = "lumiwgt*genWeight*xsecWeight*l1PreFiringWeight*puWeight*muEffWeight*elEffWeight*(((abs(lep1_pdgId)==11 && passTrigEl && ((year!=2018) || (year==2018 && !(lep1_phi>-1.57 && lep1_phi<-0.87 && lep1_eta<-1.3)))) || (abs(lep1_pdgId)==13 && passTrigMu)) && passmetfilters)"
+        weight = "lumiwgt*genWeight*xsecWeight*l1PreFiringWeight*puWeight*muEffWeight*elEffWeight*flavTagWeight*(((abs(lep1_pdgId)==11 && passTrigEl && ((year!=2018) || (year==2018 && !(lep1_phi>-1.57 && lep1_phi<-0.87 && lep1_eta<-1.3)))) || (abs(lep1_pdgId)==13 && passTrigMu)) && passmetfilters)"
     if "ttbar" in infile:
         weight = f"{weight}*topptWeight"
     if "4f" in infile:
-        weight = f"{weight}*topptWeight*0.7559" # 5FS / 4FS for tt+B component
+        weight = f"{weight}*topptWeight"#*0.7559" # 5FS / 4FS for tt+B component
     
     return weight
 
@@ -163,8 +166,18 @@ def merge_files(directory, input_files, output_file):
     os.system(hadd_command)
     rm_command = f"rm {' '.join([directory+'/'+infile for infile in input_files])}"
     os.system(rm_command)
-    
 
+def score_calculation(score_tt_Wcb, score_ttLF, score_ttbb, score_ttbj):
+    """
+    Calculate the fractional score for the ttbb, ttbj, ttcc, and ttLF samples.
+
+    Parameters:
+    - scores corresponding to the different processes.
+    """
+    return score_tt_Wcb / (score_tt_Wcb + score_ttbb + score_ttbj + score_ttLF)
+
+
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process ROOT TTrees into TH1D histograms.")
     parser.add_argument("--input_dirs", nargs='+', required=True, help="List of directories where the ROOT files are fetched.")
@@ -191,6 +204,7 @@ if __name__ == "__main__":
     hist_configs = read_csv(args.input_csv)
 
     selections = {"base": "n_ak4>=4 && (n_btagM+n_ctagM)>=3 && n_btagM>=1",
+                 #"base": "n_ak4>=4 && (n_btagM+n_ctagM)>=3 && n_btagM>=1 && score_tt_Wcb<=0.9",  
                  "ttbb" : " && genEventClassifier==9 && wcb==0",
                  "ttbj" : " && (genEventClassifier==7 || genEventClassifier==8) && wcb==0",
                  "ttcc" : " && genEventClassifier==6 && wcb==0",
@@ -209,9 +223,11 @@ if __name__ == "__main__":
     # Merge some of the output files
     ttV_list = ["h_ttW.root", "h_ttZ.root"]
     merge_files(args.output_dir, ttV_list, "h_ttV.root")
-    ttH_list = ["h_ttHbb.root", "h_ttHcc.root"]
-    merge_files(args.output_dir, ttH_list, "h_ttH.root")
+    ttH_list = ["h_ttHbb.root", "h_ttHcc.root", "h_ttV.root"]
+    merge_files(args.output_dir, ttH_list, "h_ttH-ttV.root")
     ttbb_list = ["h_ttbb-4f_ttbb.root", "h_ttbb-dps.root"]
     merge_files(args.output_dir, ttbb_list, "h_ttbb-withDPS.root")
+    ttbb_list = ["h_TWZ.root", "h_diboson.root"]
+    merge_files(args.output_dir, ttbb_list, "h_diboson-tWZ.root")
     data_list = ["h_singlee.root", "h_singlemu.root"]
     merge_files(args.output_dir, data_list, "h_Data.root")

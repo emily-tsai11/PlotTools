@@ -6,7 +6,7 @@ import csv
 import os
 import cmsstyle as CMS
 
-def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm):
+def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm, log, blind):
     """
     Reads TH1Ds with the same name from multiple files, stacks them in a THStack, and saves the result.
 
@@ -16,6 +16,8 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm):
     - output_dir: Output directory for the TCanvas containing THStacks.
     - sonly: Decide whether to plot only the signal.
     - sig_norm: Normalization of the signal.
+    - log: Use log scale on the Y-axis.
+    - blind: Decide whether to blind the data in (b,c) invariant mass histogram.
     """
     # Create a THStack and a dictionary {process name : histogram} to feed to the CMS plotting
     stack = ROOT.THStack("stack", f"Stack of {hist_name}")
@@ -30,6 +32,9 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm):
 
     if sonly:
         print(f"Plotting only the signal")
+
+    # Decide whether to blind the data in the invariant mass histogram
+    isBlind = True if (hist_name == "h_mass_minDR_bc" and blind) else False
 
     # Open input files and retrieve histograms
     for infile in input_files:
@@ -66,6 +71,7 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm):
             if sonly: continue # Avoid adding W->cb to the stack when plotting signal only
         if "Data" in infile:
             print(f"Data histogram will be added to the plot separately")
+            if isBlind: continue
             data_hist = hist_clone
             continue
 
@@ -81,9 +87,10 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm):
     canvas = CMS.cmsDiCanvas('canvas', x_low, x_high, 0, 1, 0.7, 1.3, hist_name.replace('h_',''), 'Events', 'Data/MC', square = CMS.kSquare, extraSpace=0.01, iPos=11)
     canvas.cd(1)
     legend = CMS.cmsLeg(0.65,0.4,0.85,0.87, textSize=0.04) # Needs to be defined after the cmsCanvas or it won't be plotted
-    if not sonly:
+    if not sonly and not isBlind:
         legend.AddEntry(data_hist, "Data", "pe")
     legend.AddEntry(sig_hist, f"W#rightarrow cb #times {sig_norm}", "l")
+
     CMS.cmsDrawStack(stack,legend,phys_process)
     if not sonly:
         CMS.cmsDraw(sig_hist,"same", lstyle = 2, msize = 0, lcolor = ROOT.kRed, lwidth = 4)
@@ -93,13 +100,19 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm):
 
     # Set Y-axis range based on maximum value of stacked histograms
     hist_from_canvas = CMS.GetcmsCanvasHist(canvas.GetPad(1))
-    hist_from_canvas.GetYaxis().SetRangeUser(0,max(stack.GetHistogram().GetMaximum(),data_hist.GetMaximum())*1.2)
+    hist_from_canvas.GetYaxis().SetRangeUser(0.01,max(stack.GetHistogram().GetMaximum(),data_hist.GetMaximum()) * 1.2)
     if sonly:
-        hist_from_canvas.GetYaxis().SetRangeUser(0,sig_hist.GetMaximum()*1.2)
+        hist_from_canvas.GetYaxis().SetRangeUser(0.01,sig_hist.GetMaximum() * 1.2)
     hist_from_canvas.GetYaxis().SetMaxDigits(3) # Force scientific notation above 3 digits on the Y-axis
+    #Draw the stack in log scale
+    if log: 
+        ROOT.gPad.SetLogy()
+        hist_from_canvas.GetYaxis().SetRangeUser(0.01,max(stack.GetHistogram().GetMaximum(),data_hist.GetMaximum()) * 1000)
+        if sonly:
+            hist_from_canvas.GetYaxis().SetRangeUser(0.01,sig_hist.GetMaximum() * 1000)
 
     # Add error bars
-    if not sonly:
+    if not sonly and not isBlind:
         bkg_hist = stack.GetStack().Last()
         err_hist = bkg_hist.Clone()
         CMS.cmsDraw(err_hist, "e2same0", lcolor = 335, lwidth = 1, msize = 0, fcolor = ROOT.kBlack, fstyle = 3004) 
@@ -125,15 +138,21 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm):
         CMS.cmsDrawLine(ref_line, lcolor = ROOT.kBlack, lstyle = ROOT.kDotted)
 
     # Save the canvas in pdf and png formats
-    plot_name = hist_name.replace('h_','')
-    CMS.SaveCanvas(canvas,f"{output_dir}{plot_name}.pdf")
+    plot_name = f"{output_dir}{hist_name.replace('h_','')}" if not log else f"{output_dir}/log/{hist_name.replace('h_','')}"
+    CMS.SaveCanvas(canvas,f"{plot_name}.png") # The False is needed not to close the canvas
     print()
 
-def create_output_dir(output_dir):
+def create_output_dir(output_dir, log):
     """
     Create the output directory if it does not exist.
+
+    Parameters:
+    - output_dir: The directory where the output files will be saved.
+    - log: Boolean indicating whether a log directory should be created.
     """
     os.makedirs(output_dir, exist_ok=True)
+    if log:
+        os.makedirs(os.path.join(output_dir, 'log'), exist_ok=True)
 
 def read_csv(csv_file):
     """
@@ -158,6 +177,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, required=True, help="Output directory for the TCanvas containing THStacks.")
     parser.add_argument("--sonly", nargs="?", const=1, type=bool, default=False, required=False, help="Decide whether to plot only the signal.")
     parser.add_argument("--sig_norm", nargs="?", const=1, type=int, default=1, required=False, help="Signal normalization.")
+    parser.add_argument("--log", nargs="?", const=1, type=bool, default=False, required=False, help="Decide whether to use log scale on the Y-axis.")
+    parser.add_argument("--blind", nargs="?", const=1, type=bool, default=False, required=False, help="Decide whether to blind the data in invarian mass histogram.")
 
     args = parser.parse_args()
 
@@ -169,12 +190,12 @@ if __name__ == "__main__":
     input_files = glob.glob(f"{args.input_dir}*.root")
 
     # Create the output directory if it does not exist
-    create_output_dir(args.output_dir)
+    create_output_dir(args.output_dir, args.log)
 
     # Plot either all histograms from the csv file or a single histogram
     if not args.hist_name:
         hist_list = read_csv(args.input_csv)
         for hist_name in hist_list:
-            stack_histograms(input_files, hist_name, args.output_dir, args.sonly, args.sig_norm)
+            stack_histograms(input_files, hist_name, args.output_dir, args.sonly, args.sig_norm, args.log, args.blind)
     else:
-        stack_histograms(input_files, args.hist_name, args.output_dir, args.sonly, args.sig_norm)
+        stack_histograms(input_files, args.hist_name, args.output_dir, args.sonly, args.sig_norm, args.log, args.blind)
