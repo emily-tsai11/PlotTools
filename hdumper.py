@@ -3,6 +3,7 @@ import argparse
 import glob
 import csv
 import os
+from colorama import Fore, Style 
 
 ROOT.ROOT.EnableImplicitMT()
 
@@ -19,10 +20,10 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
     - selection: String containing common event preselection.
     """
     if not (len(input_files) == len(output_files)):
-        raise ValueError("Input files, output files, and tree names must have the same length.")
+        raise ValueError("Input files and output files must have the same length.")
 
     for infile, outfile in zip(input_files, output_files):
-        print(f"Processing file: {infile}, TTree: {tree_name}")
+        print(f"{Fore.RED}Processing file: {infile}{Style.RESET_ALL}")
 
         # Open input file
         input_file = ROOT.TFile.Open(infile)
@@ -66,7 +67,7 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
             event_selection = f"{selections['base']}{selections[selection_name]}" if not "base" in selection_name else f"{selections[selection_name]}"
             if "singlee" in infile:
                 event_selection += " && passTrigMu==0" # Remove from the electron channel the events that fired the muon trigger. Could choose to do vice versa as well.
-            print(f"Applying selection: {event_selection} -> Producing output file: {output_file}")
+            print(f"Applying selection: {Fore.GREEN}{event_selection}{Style.RESET_ALL} -> Producing output file: {output_file}")
             df_selected = df.Filter(event_selection)
 
             # If weight is a complex expression, define it as a new column
