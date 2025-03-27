@@ -7,7 +7,7 @@ from colorama import Fore, Style
 
 ROOT.ROOT.EnableImplicitMT()
 
-def process_trees(input_files, output_files, tree_name, score_map, year, selections, syst_list):
+def process_trees(input_files, output_files, tree_name, score_map, year, selections, systematics, blind):
     """
     Processes multiple TTrees, converts them to multiple TH1Ds for specified branches, and saves them to ROOT files.
 
@@ -18,6 +18,8 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
     - score_map: Dictionary containing the branch name, number of bins, xmin, and xmax for the histograms.
     - year: Data taking year.
     - selections: Dictionary containing event selections.
+    - systematics: Dictionary containing systematic variations.
+    - blind: Boolean to blind the data.
     """
 
     for infile in input_files:
@@ -61,16 +63,16 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
             df_selected = df.Filter(event_selection)
 
             # Assign event weight based on data taking year and process type
-            for syst in syst_list:
-                if syst == "":
+            for syst in systematics.keys():
+                if syst == "None":
                     weight = assign_event_weight(year, infile)
                 else:
-                    weight = assign_event_weight(year, infile, syst)
+                    weight = assign_event_weight(year, infile, systematics[syst])
 
                 # If weight is a complex expression, define it as a new column
                 weight_column = "weight_column" + syst
                 if not "data" in infile:
-                    print(f"Event weight: {weight}")
+                    print(f"Event weight: {Fore.GREEN}{weight}{Style.RESET_ALL}")
                     df_selected = df_selected.Define(weight_column, weight)
                 else: # Keep the weight 1 for collision data
                     df_selected = df_selected.Define(weight_column, "1")
@@ -78,13 +80,13 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
                 for (cat, score), outfile in zip(score_map.items(), output_files):
                     fOut = ROOT.TFile(outfile, "UPDATE")
                     fOut.cd()
-                    print(f"Creating histogram for category: {cat} and selection: {Fore.GREEN}{selection_name}{Style.RESET_ALL}")
+                    print(f"Creating histogram for category: {cat} and selection: {selection_name}")
                     hist_name = infile.split('/')[-1].replace('_tree.root','')
                     if any(x in infile for x in tt_file_names):
                         hist_name = selection_name
-                    if "Data" in hist_name:
+                    if "Data" in infile:
                         hist_name = "data_obs"
-                    if not syst == "":
+                    if not syst == "None":
                         hist_name = f"{hist_name}_{syst}"
                     hist = df_selected.Histo1D((f"{hist_name}", f"Histogram of {score[0]} for process {hist_name}", score[1], score[2], score[3]), score[0], weight_column)
                     hist.Write()
@@ -149,10 +151,8 @@ def assign_event_weight(year, infile, syst=""):
     if "4f" in infile:
         weight = f"{weight}*topptWeight"#*0.7559" # 5FS / 4FS for tt+B component
     
-    if syst == "CMS_puWeight_Up":
-        weight = f"{weight}*puWeightUp/puWeight"
-    if syst == "CMS_puWeight_Down":
-        weight = f"{weight}*puWeightDown/puWeight"
+    if not syst == "":
+        weight = f"{weight}*{syst}"
     
     return weight
 
@@ -164,6 +164,7 @@ if __name__ == "__main__":
     parser.add_argument("--year", type=int, required=True, help="Data taking year.")
     parser.add_argument("--electron", nargs="?", const=1, type=bool, default=False, required=False, help="Process electron channel only.")
     parser.add_argument("--muon", nargs="?", const=1, type=bool, default=False, required=False, help="Process muon channel only.")
+    parser.add_argument('--blind', nargs='?', const=1, type=bool, default=False, required=False, help="Blind the data.")
 
     args = parser.parse_args()
 
@@ -175,8 +176,9 @@ if __name__ == "__main__":
     score_map = {"catWcb" : ["score_tt_Wcb", 20, 0., 1.], "catBB" : ["score_ttbb", 20, 0., 1.], "catBJ" : ["score_ttbj", 20, 0., 1.], "catCC" : ["score_ttcc", 20, 0., 1.], "catCJ" : ["score_ttcj", 20, 0., 1.], "catLF" : ["score_ttLF", 20, 0., 1.]}
 
     # Get input files from the input_dirs list
+    input_files = []
     for input_dir in args.input_dirs:
-        input_files = glob.glob(f"{input_dir}*.root")
+        input_files += glob.glob(f"{input_dir}*.root")
 
     # Prepare list of output files based on the name of the input files
     output_files = prepare_output(args.output_dir, args.year, categories, prepended_, appended_)
@@ -198,10 +200,29 @@ if __name__ == "__main__":
     if args.muon:
         selections["base"] += " && passTrigMu"
 
+    year = args.year
     # Define list of systematic variations to include
-    syst_list = ["","CMS_puWeight_Up", "CMS_puWeight_Down"]    
+    systematics = {"None" : "", 
+                   "CMS_pileup_%sUp" % year : "puWeightUp/puWeight", 
+                   "CMS_pileup_%sDown" % year : "puWeightDown/puWeight",
+                   "CMS_PS_isr%sUp" % year : "flavTagWeight_PSWeightISR_ttbar_UP/flavTagWeight",
+                   "CMS_PS_isr%sDown" % year : "flavTagWeight_PSWeightISR_ttbar_DOWN/flavTagWeight",
+                   "CMS_PS_fsr%sUp" % year : "flavTagWeight_PSWeightFSR_ttbar_UP/flavTagWeight",
+                   "CMS_PS_fsr%sDown" % year : "flavTagWeight_PSWeightFSR_ttbar_DOWN/flavTagWeight",
+                   "CMS_LHE_weights_scale_muF%sUp" % year: "flavTagWeight_LHEScaleWeight_muF_ttbar_UP/flavTagWeight",
+                   "CMS_LHE_weights_scale_muF%sDown" % year: "flavTagWeight_LHEScaleWeight_muF_ttbar_DOWN/flavTagWeight",
+                   "CMS_LHE_weights_scale_muR%sUp" % year: "flavTagWeight_LHEScaleWeight_muR_ttbar_UP/flavTagWeight",
+                   "CMS_LHE_weights_scale_muR%sDown" % year: "flavTagWeight_LHEScaleWeight_muR_ttbar_DOWN/flavTagWeight",
+                   "CMS_JER%sUp" % year : "flavTagWeight_JER_UP/flavTagWeight",
+                   "CMS_JER%sDown" % year : "flavTagWeight_JER_DOWN/flavTagWeight",
+                   "CMS_JES%sUp" % year : "flavTagWeight_JES_UP/flavTagWeight",
+                   "CMS_JES%sDown" % year : "flavTagWeight_JES_DOWN/flavTagWeight"}    
 
-    process_trees(input_files, output_files, args.tree_name, score_map, args.year, selections, syst_list)
+    process_trees(input_files, output_files, args.tree_name, score_map, args.year, selections, systematics, args.blind)
+
+
+
+
 
     # Merge some of the output files
     #ttV_list = ["h_ttW.root", "h_ttZ.root"]
