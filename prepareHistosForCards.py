@@ -7,7 +7,7 @@ from colorama import Fore, Style
 
 ROOT.ROOT.EnableImplicitMT()
 
-def process_trees(input_files, output_files, tree_name, score_map, year, selections, systematics, blind):
+def process_trees(input_files, output_files, tree_name, score_map, year, selections, systematics):
     """
     Processes multiple TTrees, converts them to multiple TH1Ds for specified branches, and saves them to ROOT files.
 
@@ -164,7 +164,7 @@ if __name__ == "__main__":
     parser.add_argument("--year", type=int, required=True, help="Data taking year.")
     parser.add_argument("--electron", nargs="?", const=1, type=bool, default=False, required=False, help="Process electron channel only.")
     parser.add_argument("--muon", nargs="?", const=1, type=bool, default=False, required=False, help="Process muon channel only.")
-    parser.add_argument('--blind', nargs='?', const=1, type=bool, default=False, required=False, help="Blind the data.")
+    parser.add_argument('--SR', nargs='?', const=1, type=bool, default=False, required=False, help="Apply SR cutoffs")
 
     args = parser.parse_args()
 
@@ -194,6 +194,11 @@ if __name__ == "__main__":
                  "ttLF" : " && tt_category==0 && higgs_decay==0 && wcb==0"
     }
 
+    if args.SR:
+        for selection in selections:
+            selections[selection] += " && score_tt_Wcb>0.9"
+            score_map["catWcb"] = ["score_tt_Wcb", 20, 0.9, 1.]
+
     # Apply trigger selection to separate channels if requested
     if args.electron:
         selections["base"] += " && passTrigEl"
@@ -218,20 +223,4 @@ if __name__ == "__main__":
                    "CMS_JES%sUp" % year : "flavTagWeight_JES_UP/flavTagWeight",
                    "CMS_JES%sDown" % year : "flavTagWeight_JES_DOWN/flavTagWeight"}    
 
-    process_trees(input_files, output_files, args.tree_name, score_map, args.year, selections, systematics, args.blind)
-
-
-
-
-
-    # Merge some of the output files
-    #ttV_list = ["h_ttW.root", "h_ttZ.root"]
-    #merge_files(args.output_dir, ttV_list, "h_ttV.root")
-    #ttH_list = ["h_ttHbb.root", "h_ttHcc.root", "h_ttV.root"]
-    #merge_files(args.output_dir, ttH_list, "h_ttH-ttV.root")
-    #ttbb_list = ["h_ttbb-4f_ttbb.root", "h_ttbb-dps.root"]
-    #merge_files(args.output_dir, ttbb_list, "h_ttbb-withDPS.root")
-    #ttbb_list = ["h_TWZ.root", "h_diboson.root"]
-    #merge_files(args.output_dir, ttbb_list, "h_diboson-tWZ.root")
-    #data_list = ["h_singlee.root", "h_singlemu.root"]
-    #merge_files(args.output_dir, data_list, "h_Data.root")"
+    process_trees(input_files, output_files, args.tree_name, score_map, args.year, selections, systematics)
