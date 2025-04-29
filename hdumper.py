@@ -191,6 +191,7 @@ if __name__ == "__main__":
     parser.add_argument("--year", type=int, required=True, help="Data taking year.")
     parser.add_argument("--electron", nargs="?", const=1, type=bool, default=False, required=False, help="Process electron channel only.")
     parser.add_argument("--muon", nargs="?", const=1, type=bool, default=False, required=False, help="Process muon channel only.")
+    parser.add_argument("--addSelection", type=str, required=False, help="Additional selection to apply to all processes.")
 
     args = parser.parse_args()
 
@@ -218,6 +219,11 @@ if __name__ == "__main__":
         selections["base"] += " && passTrigEl"
     if args.muon:
         selections["base"] += " && passTrigMu"
+
+    # Apply additional selections if specified
+    if args.addSelection:
+        for key in selections.keys():
+            selections[key] += f" && ({args.addSelection})"
 
     process_trees(input_files, output_files, args.tree_name, hist_configs, args.year, selections)
 

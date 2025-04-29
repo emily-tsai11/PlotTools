@@ -147,13 +147,13 @@ for syst in shapeSysts:
 for bin in bins:
     print(f"Extracting shapes for bin {bin} from file {inputfiles[bin]}")
     cb.cp().bin([bin]).ExtractShapes(inputfiles[bin], "$PROCESS", "$PROCESS_$SYSTEMATIC")
-    print(f"Shapes extracted for bin {bin}:")
-    cb.PrintAll()
+    #print(f"Shapes extracted for bin {bin}:")
+    #cb.PrintAll()
+
+cb.WriteDatacard(outputCardName, outputShapesName)
 
 #Fix negative bins in the shape file. Negative bin contents are set to zero. Uncertainties larger than the bin content are set to the bin content.
 fixNegativeBins(outputShapesName, False)
-
-cb.WriteDatacard(outputCardName, outputShapesName)
 
 # Create workspace with specific model and POI definitions
 print ("Test datacards and create workspace for " + year + "!")

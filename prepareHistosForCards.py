@@ -173,7 +173,7 @@ if __name__ == "__main__":
     categories = ["catWcb", "catBB", "catBJ", "catCC", "catCJ", "catLF"]
     appended_ = ["_CR", "_SR"]
 
-    score_map = {"catWcb" : ["score_tt_Wcb", 20, 0., 1.], "catBB" : ["score_ttbb", 20, 0., 1.], "catBJ" : ["score_ttbj", 20, 0., 1.], "catCC" : ["score_ttcc", 20, 0., 1.], "catCJ" : ["score_ttcj", 20, 0., 1.], "catLF" : ["score_ttLF", 20, 0., 1.]}
+    score_map = {"catWcb" : ["score_tt_Wcb", 10, 0., 1.], "catBB" : ["score_ttbb", 10, 0., 1.], "catBJ" : ["score_ttbj", 10, 0., 1.], "catCC" : ["score_ttcc", 10, 0., 1.], "catCJ" : ["score_ttcj", 10, 0., 1.], "catLF" : ["score_ttLF", 10, 0., 1.]}
 
     # Get input files from the input_dirs list
     input_files = []
@@ -186,7 +186,6 @@ if __name__ == "__main__":
 
     # Define event selections. Some are process-specific.
     selections = {"base": "n_ak4>=4 && (n_btagM+n_ctagM)>=3 && n_btagM>=1",
-                 #"base": "n_ak4>=4 && (n_btagM+n_ctagM)>=3 && n_btagM>=1 && score_tt_Wcb<=0.9",  
                  "ttbb" : " && genEventClassifier==9 && wcb==0",
                  "ttbj" : " && (genEventClassifier==7 || genEventClassifier==8) && wcb==0",
                  "ttcc" : " && genEventClassifier==6 && wcb==0",
@@ -196,8 +195,8 @@ if __name__ == "__main__":
 
     if args.SR:
         for selection in selections:
-            selections[selection] += " && score_tt_Wcb>0.9"
-            score_map["catWcb"] = ["score_tt_Wcb", 20, 0.9, 1.]
+            selections[selection] += " && score_tt_Wcb>0.6"
+            score_map["catWcb"] = ["score_tt_Wcb", 4, 0.6, 1.]
 
     # Apply trigger selection to separate channels if requested
     if args.electron:
@@ -210,14 +209,14 @@ if __name__ == "__main__":
     systematics = {"None" : "", 
                    "CMS_pileup_%sUp" % year : "puWeightUp/puWeight", 
                    "CMS_pileup_%sDown" % year : "puWeightDown/puWeight",
-                   "CMS_PS_isr%sUp" % year : "flavTagWeight_PSWeightISR_ttbar_UP/flavTagWeight",
-                   "CMS_PS_isr%sDown" % year : "flavTagWeight_PSWeightISR_ttbar_DOWN/flavTagWeight",
-                   "CMS_PS_fsr%sUp" % year : "flavTagWeight_PSWeightFSR_ttbar_UP/flavTagWeight",
-                   "CMS_PS_fsr%sDown" % year : "flavTagWeight_PSWeightFSR_ttbar_DOWN/flavTagWeight",
-                   "CMS_LHE_weights_scale_muF%sUp" % year: "flavTagWeight_LHEScaleWeight_muF_ttbar_UP/flavTagWeight",
-                   "CMS_LHE_weights_scale_muF%sDown" % year: "flavTagWeight_LHEScaleWeight_muF_ttbar_DOWN/flavTagWeight",
-                   "CMS_LHE_weights_scale_muR%sUp" % year: "flavTagWeight_LHEScaleWeight_muR_ttbar_UP/flavTagWeight",
-                   "CMS_LHE_weights_scale_muR%sDown" % year: "flavTagWeight_LHEScaleWeight_muR_ttbar_DOWN/flavTagWeight",
+                   #"CMS_PS_isr%sUp" % year : "flavTagWeight_PSWeightISR_ttbar_UP/flavTagWeight",
+                   #"CMS_PS_isr%sDown" % year : "flavTagWeight_PSWeightISR_ttbar_DOWN/flavTagWeight",
+                   #"CMS_PS_fsr%sUp" % year : "flavTagWeight_PSWeightFSR_ttbar_UP/flavTagWeight",
+                   #"CMS_PS_fsr%sDown" % year : "flavTagWeight_PSWeightFSR_ttbar_DOWN/flavTagWeight",
+                   #"CMS_LHE_weights_scale_muF%sUp" % year: "flavTagWeight_LHEScaleWeight_muF_ttbar_UP/flavTagWeight",
+                   #"CMS_LHE_weights_scale_muF%sDown" % year: "flavTagWeight_LHEScaleWeight_muF_ttbar_DOWN/flavTagWeight",
+                   #"CMS_LHE_weights_scale_muR%sUp" % year: "flavTagWeight_LHEScaleWeight_muR_ttbar_UP/flavTagWeight",
+                   #"CMS_LHE_weights_scale_muR%sDown" % year: "flavTagWeight_LHEScaleWeight_muR_ttbar_DOWN/flavTagWeight",
                    "CMS_JER%sUp" % year : "flavTagWeight_JER_UP/flavTagWeight",
                    "CMS_JER%sDown" % year : "flavTagWeight_JER_DOWN/flavTagWeight",
                    "CMS_JES%sUp" % year : "flavTagWeight_JES_UP/flavTagWeight",
