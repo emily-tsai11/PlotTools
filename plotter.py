@@ -139,7 +139,7 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm, log, b
 
     # Save the canvas in pdf and png formats
     plot_name = f"{output_dir}{hist_name.replace('h_','')}" if not log else f"{output_dir}/log/{hist_name.replace('h_','')}"
-    CMS.SaveCanvas(canvas,f"{plot_name}.png") # The False is needed not to close the canvas
+    CMS.SaveCanvas(canvas,f"{plot_name}.pdf") # The False is needed not to close the canvas
     print()
 
 def create_output_dir(output_dir, log):
@@ -173,7 +173,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Stack TH1D histograms from multiple ROOT files.")
     parser.add_argument("--input_dir", type=str, required=True, help="Input directory, where ROOT files are located.")
     parser.add_argument("--hist_name", required=False, help="Name of the histograms to stack.")
-    parser.add_argument("--input_csv", type=str, required=False, help="The csv file to read variables and ranges from.")
+    parser.add_argument("--input_csv", type=str, required=True, help="The csv file to read variables and ranges from.")
     parser.add_argument("--output_dir", type=str, required=True, help="Output directory for the TCanvas containing THStacks.")
     parser.add_argument("--sonly", nargs="?", const=1, type=bool, default=False, required=False, help="Decide whether to plot only the signal.")
     parser.add_argument("--sig_norm", nargs="?", const=1, type=int, default=1, required=False, help="Signal normalization.")

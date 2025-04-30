@@ -7,7 +7,7 @@ from colorama import Fore, Style
 
 ROOT.ROOT.EnableImplicitMT()
 
-def process_trees(input_files, output_files, tree_name, hist_configs, year, selections):
+def process_trees(input_files, output_files, tree_name, hist_configs, year, selections, eventClassification):
     """
     Processes multiple TTrees, converts them to multiple TH1Ds for specified branches, and saves them to ROOT files.
 
@@ -16,13 +16,15 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
     - output_files: List of output ROOT files.
     - tree_names: List of TTree names corresponding to input files.
     - hist_configs: List of dictionaries with keys 'branch', 'nbins', 'xmin', 'xmax'.
-    - weight: Optional weight expression for filling histograms. Can be a formula involving multiple branches.
-    - selection: String containing common event preselection.
+    - year: Data taking year.
+    - selections: String containing common event preselection.
+    - eventClassification: Boolean indicating whether to apply event classification.
     """
     if not (len(input_files) == len(output_files)):
         raise ValueError("Input files and output files must have the same length.")
 
     for infile, outfile in zip(input_files, output_files):
+
         print(f"{Fore.RED}Processing file: {infile}{Style.RESET_ALL}")
 
         # Open input file
@@ -37,6 +39,15 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
 
         # Create RDataFrame from TTree
         df = ROOT.RDataFrame(tree)
+
+        if eventClassification:
+            print(f"{Fore.YELLOW}Running in event classification mode. Will define a series of fractional scores.{Style.RESET_ALL}")
+            # Define the fractional scores
+            df = df.Define("fscore_ttbb", "score_ttbb / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_ttbj", "score_ttbj / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_ttcc", "score_ttcc / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_ttcj", "score_ttcj / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_ttLF", "score_ttLF / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
 
         tt_file_names = ["ttbb-4f","ttbar-powheg"]
         tt4f_strings = ["ttbb", "ttbj"]
@@ -70,14 +81,6 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
             print(f"Applying selection: {Fore.GREEN}{event_selection}{Style.RESET_ALL} -> Producing output file: {output_file}")
             df_selected = df.Filter(event_selection)
 
-            # If weight is a complex expression, define it as a new column
-            weight_column = "weight_column"
-            if not "data" in infile:
-                print(f"Event weight: {weight}")
-                df_selected = df_selected.Define(weight_column, weight)
-            else: # Keep the weight 1 for collision data
-                df_selected = df_selected.Define(weight_column, "1")
-
             # Create histograms for each branch
             for hist_config in hist_configs:
                 branch_name = hist_config['branch']
@@ -87,9 +90,35 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 print(f"Creating histogram for branch: {branch_name}")
                 # Create histogram
                 # If branch name does not exist in the TTree, create a new column
-                if not branch_name in df_selected.GetColumnNames():
-                    df_selected = df_selected.Define("fractional_score", "score_tt_Wcb / (score_tt_Wcb + score_ttbb + score_ttbj + score_ttLF)")
-                    branch_name = "fractional_score"
+                #if not branch_name in df_selected.GetColumnNames():
+                #    df_selected = df_selected.Define("fractional_score", "score_tt_Wcb / (score_tt_Wcb + score_ttbb + score_ttbj + score_ttLF)")
+                #    branch_name = "fractional_score"
+
+                # Condizione per selezionare eventi in cui score_ttLF è maggiore di tutti gli altri score
+                if eventClassification:
+                    eventClassificationBaseSelection = "score_tt_Wcb > 0.6 && score_ttLF < 0.2"
+                    SR_selection = "score_tt_Wcb > 0.85"
+                    CR_selection = "score_tt_Wcb < 0.85"
+                    adhoc_selection = {
+                        "score_tt_Wcb" : f"{eventClassificationBaseSelection} && {SR_selection} && score_tt_Wcb > score_ttbb && score_tt_Wcb > score_ttbj && score_tt_Wcb > score_ttcc && score_tt_Wcb > score_ttcj",
+                        "fscore_ttbb" : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbb > score_ttbj && score_ttbb > score_ttcc && score_ttbb > score_ttcj && score_ttbb > score_ttLF",
+                        "fscore_ttbj" : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbj > score_ttbb && score_ttbj > score_ttcc && score_ttbj > score_ttcj && score_ttbj > score_ttLF",
+                        "fscore_ttcc" : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcc > score_ttbb && score_ttcc > score_ttbj && score_ttcc > score_ttcj && score_ttcc > score_ttLF",
+                        "fscore_ttcj" : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcj > score_ttbb && score_ttcj > score_ttbj && score_ttcj > score_ttcc && score_ttcj > score_ttLF",
+                        "fscore_ttLF" : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttLF > score_ttbb && score_ttLF > score_ttbj && score_ttLF > score_ttcc && score_ttLF > score_ttcj"
+                    }
+                
+                df_selected = df.Filter(adhoc_selection[branch_name]) if eventClassification else df_selected
+
+                # If weight is a complex expression, define it as a new column
+                weight_column = "weight_column"
+                if not "data" in infile:
+                    print(f"Event weight: {weight}")
+                    df_selected = df_selected.Define(weight_column, weight)
+                else: # Keep the weight 1 for collision data
+                    df_selected = df_selected.Define(weight_column, "1")
+
+                # Create histogram
                 hist = df_selected.Histo1D((f"h_{branch_name}", f"Histogram of {branch_name}", nbins, xmin, xmax), branch_name, weight_column)
                 # Write histogram to output file
                 hist.Write()
@@ -192,6 +221,7 @@ if __name__ == "__main__":
     parser.add_argument("--electron", nargs="?", const=1, type=bool, default=False, required=False, help="Process electron channel only.")
     parser.add_argument("--muon", nargs="?", const=1, type=bool, default=False, required=False, help="Process muon channel only.")
     parser.add_argument("--addSelection", type=str, required=False, help="Additional selection to apply to all processes.")
+    parser.add_argument("--eventClassification", nargs="?", const=1, type=bool, default=False, required=False, help="Apply event classification selection.")
 
     args = parser.parse_args()
 
@@ -206,7 +236,6 @@ if __name__ == "__main__":
     hist_configs = read_csv(args.input_csv)
 
     selections = {"base": "n_ak4>=4 && (n_btagM+n_ctagM)>=3 && n_btagM>=1",
-                 #"base": "n_ak4>=4 && (n_btagM+n_ctagM)>=3 && n_btagM>=1 && score_tt_Wcb<=0.9",  
                  "ttbb" : " && genEventClassifier==9 && wcb==0",
                  "ttbj" : " && (genEventClassifier==7 || genEventClassifier==8) && wcb==0",
                  "ttcc" : " && genEventClassifier==6 && wcb==0",
@@ -225,7 +254,7 @@ if __name__ == "__main__":
         for key in selections.keys():
             selections[key] += f" && ({args.addSelection})"
 
-    process_trees(input_files, output_files, args.tree_name, hist_configs, args.year, selections)
+    process_trees(input_files, output_files, args.tree_name, hist_configs, args.year, selections, args.eventClassification)
 
     # Merge some of the output files
     ttV_list = ["h_ttW.root", "h_ttZ.root"]
