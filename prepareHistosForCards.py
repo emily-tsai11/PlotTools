@@ -3,11 +3,12 @@ import argparse
 import glob
 import csv
 import os
+import numpy as np
 from colorama import Fore, Style
 
 ROOT.ROOT.EnableImplicitMT()
 
-def process_trees(input_files, output_files, tree_name, score_map, year, selections, systematics):
+def process_trees(input_files, output_files, tree_name, score_map, year, selections, adhoc_selection, systematics):
     """
     Processes multiple TTrees, converts them to multiple TH1Ds for specified branches, and saves them to ROOT files.
 
@@ -18,8 +19,9 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
     - score_map: Dictionary containing the branch name, number of bins, xmin, and xmax for the histograms.
     - year: Data taking year.
     - selections: Dictionary containing event selections.
+    - adhoc_selection: Dictionary containing an ad-hoc event selection to fill the scores.
+    - adhoc_binning: Dictionary containing ad-hoc binning for the scores.
     - systematics: Dictionary containing systematic variations.
-    - blind: Boolean to blind the data.
     """
 
     for infile in input_files:
@@ -38,9 +40,17 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
         # Create RDataFrame from TTree
         df = ROOT.RDataFrame(tree)
 
-        tt_file_names = ["ttbb-4f","ttbar-powheg"]
+        # Define the fractional scores
+        df = df.Define("fscore_ttbb", "score_ttbb / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+        df = df.Define("fscore_ttbj", "score_ttbj / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+        df = df.Define("fscore_ttcc", "score_ttcc / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+        df = df.Define("fscore_ttcj", "score_ttcj / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+        df = df.Define("fscore_ttLF", "score_ttLF / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+
+        tt_file_names = ["ttbb-4f", "ttbb-dps", "ttbar-powheg"]
         tt4f_strings = ["ttbb", "ttbj"]
         tt_strings   = ["ttcc", "ttcj", "ttLF"]
+
 
         # Process each selection-output combinations
         for selection_name in selections:
@@ -50,7 +60,7 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
                 continue
             if any(x in infile for x in tt_file_names) and "base" in selection_name:
                 continue
-            if any(x in selection_name for x in tt4f_strings) and not "4f" in infile: 
+            if any(x in selection_name for x in tt4f_strings) and not "bb" in infile:
                 continue
             if any(x in selection_name for x in tt_strings) and not "powheg" in infile:
                 continue
@@ -77,10 +87,28 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
                 else: # Keep the weight 1 for collision data
                     df_selected = df_selected.Define(weight_column, "1")
 
-                for (cat, score), outfile in zip(score_map.items(), output_files):
+                ## Create histograms for each branch
+                #for hist_config in hist_configs:
+                #    branch_name = hist_config['branch']
+                #    nbins = int(hist_config['nbins'])
+                #    xmin = float(hist_config['xmin'])
+                #    xmax = float(hist_config['xmax'])
+                #    print(f"Creating histogram for branch: {branch_name}")
+
+                #    final_df = dict()
+                #    final_df[branch_name] = df_selected.Filter(adhoc_selection[branch_name]) if eventClassification else df_selected
+
+                #    #print("after second event selection:", final_df[branch_name].Count().GetValue())
+
+                #    # Create histogram
+                #    hist = final_df[branch_name].Histo1D((f"h_{branch_name}", f"Histogram of {branch_name}", len(adhoc_binning[branch_name])-1, adhoc_binning[branch_name]), branch_name, weight_column)
+
+
+                final_df = dict()
+                for (score, adhoc_sel), outfile in zip(adhoc_selection.items(), output_files):
                     fOut = ROOT.TFile(outfile, "UPDATE")
                     fOut.cd()
-                    print(f"Creating histogram for category: {cat} and selection: {selection_name}")
+                    print(f"Creating histogram for category: {outfile.split('_')[1]} and selection: {selection_name}")
                     hist_name = infile.split('/')[-1].replace('_tree.root','')
                     if any(x in infile for x in tt_file_names):
                         hist_name = selection_name
@@ -88,11 +116,16 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
                         hist_name = "data_obs"
                     if not syst == "None":
                         hist_name = f"{hist_name}_{syst}"
-                    hist = df_selected.Histo1D((f"{hist_name}", f"Histogram of {score[0]} for process {hist_name}", score[1], score[2], score[3]), score[0], weight_column)
+
+                    final_df[score] = df_selected.Filter(adhoc_sel[0])
+
+                    hist = final_df[score].Histo1D((f"{hist_name}", f"Histogram of {score} for process {hist_name}", len(adhoc_sel[1])-1, adhoc_sel[1]), score, weight_column)
                     hist.Write()
 
                     print(f"Saved histograms to: {outfile}\n")
                     fOut.Close()
+
+                if "Data" in infile: break # Do not continue with the systematic variations for collision data
 
         input_file.Close()
 
@@ -164,7 +197,7 @@ if __name__ == "__main__":
     parser.add_argument("--year", type=int, required=True, help="Data taking year.")
     parser.add_argument("--electron", nargs="?", const=1, type=bool, default=False, required=False, help="Process electron channel only.")
     parser.add_argument("--muon", nargs="?", const=1, type=bool, default=False, required=False, help="Process muon channel only.")
-    parser.add_argument('--SR', nargs='?', const=1, type=bool, default=False, required=False, help="Apply SR cutoffs")
+    #parser.add_argument('--SR', nargs='?', const=1, type=bool, default=False, required=False, help="Apply SR cutoffs")
 
     args = parser.parse_args()
 
@@ -193,10 +226,30 @@ if __name__ == "__main__":
                  "ttLF" : " && tt_category==0 && higgs_decay==0 && wcb==0"
     }
 
-    if args.SR:
-        for selection in selections:
-            selections[selection] += " && score_tt_Wcb>0.6"
-            score_map["catWcb"] = ["score_tt_Wcb", 4, 0.6, 1.]
+    eventClassificationBaseSelection = "score_tt_Wcb > 0.6 && score_ttLF < 0.05"
+    SR_selection = "score_tt_Wcb > 0.85"
+    CR_selection = "score_tt_Wcb < 0.85"
+    adhoc_selection = {
+        "score_tt_Wcb" : [f"{eventClassificationBaseSelection} && {SR_selection}", np.array([0.,0.9,1.])],
+        "fscore_ttbb"  : [f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbb > score_ttbj && score_ttbb > score_ttcc && score_ttbb > score_ttcj && score_ttbb > score_ttLF", np.array([0.,0.3,0.4,0.5,0.6,1.])],
+        "fscore_ttbj"  : [f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbj > score_ttbb && score_ttbj > score_ttcc && score_ttbj > score_ttcj && score_ttbj > score_ttLF", np.array([0.,0.3,0.35,0.4,0.5,1.])],
+        "fscore_ttcc"  : [f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcc > score_ttbb && score_ttcc > score_ttbj && score_ttcc > score_ttcj && score_ttcc > score_ttLF", np.array([0.,0.3,0.35,0.4,1.])],
+        "fscore_ttcj"  : [f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcj > score_ttbb && score_ttcj > score_ttbj && score_ttcj > score_ttcc && score_ttcj > score_ttLF", np.array([0.,0.3,1.])],
+        "fscore_ttLF"  : [f"{eventClassificationBaseSelection} && {CR_selection} && score_ttLF > score_ttbb && score_ttLF > score_ttbj && score_ttLF > score_ttcc && score_ttLF > score_ttcj", np.array([0.,0.3,0.35,0.4,1.])]
+    }
+    #adhoc_binning = {
+    #    "score_tt_Wcb" : np.array([0.,0.9,1.]),
+    #    "fscore_ttbb"  : np.array([0.,0.3,0.4,0.5,0.6,1.]),
+    #    "fscore_ttbj"  : np.array([0.,0.3,0.35,0.4,0.5,1.]),
+    #    "fscore_ttcc"  : np.array([0.,0.3,0.35,0.4,1.]),
+    #    "fscore_ttcj"  : np.array([0.,0.3,1.]),
+    #    "fscore_ttLF"  : np.array([0.,0.3,0.35,0.4,1.]),
+    #}
+
+    #if args.SR:
+    #    for selection in selections:
+    #        selections[selection] += " && score_tt_Wcb>0.6"
+    #        score_map["catWcb"] = ["score_tt_Wcb", 4, 0.6, 1.]
 
     # Apply trigger selection to separate channels if requested
     if args.electron:
@@ -222,4 +275,4 @@ if __name__ == "__main__":
                    "CMS_JES%sUp" % year : "flavTagWeight_JES_UP/flavTagWeight",
                    "CMS_JES%sDown" % year : "flavTagWeight_JES_DOWN/flavTagWeight"}    
 
-    process_trees(input_files, output_files, args.tree_name, score_map, args.year, selections, systematics)
+    process_trees(input_files, output_files, args.tree_name, score_map, args.year, selections, adhoc_selection, systematics)

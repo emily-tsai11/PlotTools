@@ -139,7 +139,7 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm, log, b
 
     # Save the canvas in pdf and png formats
     plot_name = f"{output_dir}{hist_name.replace('h_','')}" if not log else f"{output_dir}/log/{hist_name.replace('h_','')}"
-    CMS.SaveCanvas(canvas,f"{plot_name}.pdf") # The False is needed not to close the canvas
+    CMS.SaveCanvas(canvas,f"{plot_name}.png") # The False is needed not to close the canvas
     print()
 
 def create_output_dir(output_dir, log):

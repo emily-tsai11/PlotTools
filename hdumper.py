@@ -4,6 +4,7 @@ import glob
 import csv
 import os
 from colorama import Fore, Style 
+import numpy as np
 
 ROOT.ROOT.EnableImplicitMT()
 
@@ -16,7 +17,7 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
     - output_files: List of output ROOT files.
     - tree_names: List of TTree names corresponding to input files.
     - hist_configs: List of dictionaries with keys 'branch', 'nbins', 'xmin', 'xmax'.
-    - year: Data taking year.
+    - year: Year of data taking.
     - selections: String containing common event preselection.
     - eventClassification: Boolean indicating whether to apply event classification.
     """
@@ -49,7 +50,7 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
             df = df.Define("fscore_ttcj", "score_ttcj / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
             df = df.Define("fscore_ttLF", "score_ttLF / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
 
-        tt_file_names = ["ttbb-4f","ttbar-powheg"]
+        tt_file_names = ["ttbb-4f", "ttbb-dps", "ttbar-powheg"]
         tt4f_strings = ["ttbb", "ttbj"]
         tt_strings   = ["ttcc", "ttcj", "ttLF"]
 
@@ -64,7 +65,7 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 continue
             if any(x in infile for x in tt_file_names) and "base" in selection_name:
                 continue
-            if any(x in selection_name for x in tt4f_strings) and not "4f" in infile: 
+            if any(x in selection_name for x in tt4f_strings) and not "bb" in infile:
                 continue
             if any(x in selection_name for x in tt_strings) and not "powheg" in infile:
                 continue
@@ -81,6 +82,39 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
             print(f"Applying selection: {Fore.GREEN}{event_selection}{Style.RESET_ALL} -> Producing output file: {output_file}")
             df_selected = df.Filter(event_selection)
 
+            #print("after first event selection:", df_selected.Count().GetValue())
+
+            # If weight is a complex expression, define it as a new column
+            weight_column = "weight_column"
+            if not "data" in infile:
+                print(f"Event weight: {weight}")
+                df_selected = df_selected.Define(weight_column, weight)
+            else: # Keep the weight 1 for collision data
+                df_selected = df_selected.Define(weight_column, "1")
+
+            # Define event classification for the dedicated mode
+            if eventClassification:
+                eventClassificationBaseSelection = "score_tt_Wcb > 0.6 && score_ttLF < 0.05"
+                SR_selection = "score_tt_Wcb > 0.85"
+                CR_selection = "score_tt_Wcb < 0.85"
+                adhoc_selection = {
+                    "score_tt_Wcb" : f"{eventClassificationBaseSelection} && {SR_selection}",
+                    "fscore_ttbb"  : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbb > score_ttbj && score_ttbb > score_ttcc && score_ttbb > score_ttcj && score_ttbb > score_ttLF",
+                    "fscore_ttbj"  : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbj > score_ttbb && score_ttbj > score_ttcc && score_ttbj > score_ttcj && score_ttbj > score_ttLF",
+                    "fscore_ttcc"  : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcc > score_ttbb && score_ttcc > score_ttbj && score_ttcc > score_ttcj && score_ttcc > score_ttLF",
+                    "fscore_ttcj"  : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcj > score_ttbb && score_ttcj > score_ttbj && score_ttcj > score_ttcc && score_ttcj > score_ttLF",
+                    "fscore_ttLF"  : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttLF > score_ttbb && score_ttLF > score_ttbj && score_ttLF > score_ttcc && score_ttLF > score_ttcj"
+                }
+                adhoc_binning = {
+                    "score_tt_Wcb" : np.array([0.,0.9,1.]),
+                    "fscore_ttbb"  : np.array([0.,0.3,0.4,0.5,0.6,1.]),
+                    "fscore_ttbj"  : np.array([0.,0.3,0.35,0.4,0.5,1.]),
+                    "fscore_ttcc"  : np.array([0.,0.3,0.35,0.4,1.]),
+                    "fscore_ttcj"  : np.array([0.,0.3,1.]),
+                    "fscore_ttLF"  : np.array([0.,0.3,0.35,0.4,1.]),
+                }
+
+            final_df = dict() # Changed position of this
             # Create histograms for each branch
             for hist_config in hist_configs:
                 branch_name = hist_config['branch']
@@ -88,38 +122,17 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 xmin = float(hist_config['xmin'])
                 xmax = float(hist_config['xmax'])
                 print(f"Creating histogram for branch: {branch_name}")
-                # Create histogram
-                # If branch name does not exist in the TTree, create a new column
-                #if not branch_name in df_selected.GetColumnNames():
-                #    df_selected = df_selected.Define("fractional_score", "score_tt_Wcb / (score_tt_Wcb + score_ttbb + score_ttbj + score_ttLF)")
-                #    branch_name = "fractional_score"
-
-                # Condizione per selezionare eventi in cui score_ttLF è maggiore di tutti gli altri score
-                if eventClassification:
-                    eventClassificationBaseSelection = "score_tt_Wcb > 0.6 && score_ttLF < 0.2"
-                    SR_selection = "score_tt_Wcb > 0.85"
-                    CR_selection = "score_tt_Wcb < 0.85"
-                    adhoc_selection = {
-                        "score_tt_Wcb" : f"{eventClassificationBaseSelection} && {SR_selection} && score_tt_Wcb > score_ttbb && score_tt_Wcb > score_ttbj && score_tt_Wcb > score_ttcc && score_tt_Wcb > score_ttcj",
-                        "fscore_ttbb" : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbb > score_ttbj && score_ttbb > score_ttcc && score_ttbb > score_ttcj && score_ttbb > score_ttLF",
-                        "fscore_ttbj" : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbj > score_ttbb && score_ttbj > score_ttcc && score_ttbj > score_ttcj && score_ttbj > score_ttLF",
-                        "fscore_ttcc" : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcc > score_ttbb && score_ttcc > score_ttbj && score_ttcc > score_ttcj && score_ttcc > score_ttLF",
-                        "fscore_ttcj" : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcj > score_ttbb && score_ttcj > score_ttbj && score_ttcj > score_ttcc && score_ttcj > score_ttLF",
-                        "fscore_ttLF" : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttLF > score_ttbb && score_ttLF > score_ttbj && score_ttLF > score_ttcc && score_ttLF > score_ttcj"
-                    }
                 
-                df_selected = df.Filter(adhoc_selection[branch_name]) if eventClassification else df_selected
+                final_df[branch_name] = df_selected.Filter(adhoc_selection[branch_name]) if eventClassification else df_selected
 
-                # If weight is a complex expression, define it as a new column
-                weight_column = "weight_column"
-                if not "data" in infile:
-                    print(f"Event weight: {weight}")
-                    df_selected = df_selected.Define(weight_column, weight)
-                else: # Keep the weight 1 for collision data
-                    df_selected = df_selected.Define(weight_column, "1")
+                #print("after second event selection:", final_df[branch_name].Count().GetValue())
 
                 # Create histogram
-                hist = df_selected.Histo1D((f"h_{branch_name}", f"Histogram of {branch_name}", nbins, xmin, xmax), branch_name, weight_column)
+                if eventClassification:
+                    hist = final_df[branch_name].Histo1D((f"h_{branch_name}", f"Histogram of {branch_name}", len(adhoc_binning[branch_name])-1, adhoc_binning[branch_name]), branch_name, weight_column)
+                else:
+                    hist = final_df[branch_name].Histo1D((f"h_{branch_name}", f"Histogram of {branch_name}", nbins, xmin, xmax), branch_name, weight_column)
+
                 # Write histogram to output file
                 hist.Write()
 
@@ -261,8 +274,10 @@ if __name__ == "__main__":
     merge_files(args.output_dir, ttV_list, "h_ttV.root")
     ttH_list = ["h_ttHbb.root", "h_ttHcc.root", "h_ttV.root"]
     merge_files(args.output_dir, ttH_list, "h_ttH-ttV.root")
-    ttbb_list = ["h_ttbb-4f_ttbb.root", "h_ttbb-dps.root"]
+    ttbb_list = ["h_ttbb-4f_ttbb.root", "h_ttbb-dps_ttbb.root"]
     merge_files(args.output_dir, ttbb_list, "h_ttbb-withDPS.root")
+    ttbj_list = ["h_ttbb-4f_ttbj.root", "h_ttbb-dps_ttbj.root"]
+    merge_files(args.output_dir, ttbj_list, "h_ttbj-withDPS.root")
     ttbb_list = ["h_TWZ.root", "h_diboson.root"]
     merge_files(args.output_dir, ttbb_list, "h_diboson-tWZ.root")
     data_list = ["h_singlee.root", "h_singlemu.root"]
