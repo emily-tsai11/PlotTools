@@ -8,7 +8,7 @@ from colorama import Fore, Style
 
 ROOT.ROOT.EnableImplicitMT()
 
-def process_trees(input_files, output_files, tree_name, score_map, year, selections, adhoc_selection, systematics):
+def process_trees(input_files, output_files, tree_name, year, selections, adhoc_selection, systematics):
     """
     Processes multiple TTrees, converts them to multiple TH1Ds for specified branches, and saves them to ROOT files.
 
@@ -16,7 +16,6 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
     - input_files: List of input ROOT files.
     - output_files: List of output ROOT files.
     - tree_names: List of TTree names corresponding to input files.
-    - score_map: Dictionary containing the branch name, number of bins, xmin, and xmax for the histograms.
     - year: Data taking year.
     - selections: Dictionary containing event selections.
     - adhoc_selection: Dictionary containing an ad-hoc event selection to fill the scores.
@@ -47,7 +46,7 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
         df = df.Define("fscore_ttcj", "score_ttcj / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
         df = df.Define("fscore_ttLF", "score_ttLF / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
 
-        tt_file_names = ["ttbb-4f", "ttbb-dps", "ttbar-powheg"]
+        tt_file_names = ["ttbb-4f", "ttbar-powheg"]
         tt4f_strings = ["ttbb", "ttbj"]
         tt_strings   = ["ttcc", "ttcj", "ttLF"]
 
@@ -60,17 +59,21 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
                 continue
             if any(x in infile for x in tt_file_names) and "base" in selection_name:
                 continue
-            if any(x in selection_name for x in tt4f_strings) and not "bb" in infile:
+            if any(x in selection_name for x in tt4f_strings) and not "4f" in infile:
                 continue
             if any(x in selection_name for x in tt_strings) and not "powheg" in infile:
                 continue
 
             # Add event selection making sure that the "base" selection is applied everywhere
+            print(f"Events before selection: {df.Count().GetValue()}")
             event_selection = f"{selections['base']}{selections[selection_name]}" if not "base" in selection_name else f"{selections[selection_name]}"
             if "singlee" in infile:
                 event_selection += " && passTrigMu==0" # Remove from the electron channel the events that fired the muon trigger. Could choose to do vice versa as well.
             #print(f"Applying selection: {event_selection} -> Producing output file: {output_file}")
             df_selected = df.Filter(event_selection)
+
+            # Check the number of events after selection
+            print(f"Events passing selection: {df_selected.Count().GetValue()}")
 
             # Assign event weight based on data taking year and process type
             for syst in systematics.keys():
@@ -87,28 +90,11 @@ def process_trees(input_files, output_files, tree_name, score_map, year, selecti
                 else: # Keep the weight 1 for collision data
                     df_selected = df_selected.Define(weight_column, "1")
 
-                ## Create histograms for each branch
-                #for hist_config in hist_configs:
-                #    branch_name = hist_config['branch']
-                #    nbins = int(hist_config['nbins'])
-                #    xmin = float(hist_config['xmin'])
-                #    xmax = float(hist_config['xmax'])
-                #    print(f"Creating histogram for branch: {branch_name}")
-
-                #    final_df = dict()
-                #    final_df[branch_name] = df_selected.Filter(adhoc_selection[branch_name]) if eventClassification else df_selected
-
-                #    #print("after second event selection:", final_df[branch_name].Count().GetValue())
-
-                #    # Create histogram
-                #    hist = final_df[branch_name].Histo1D((f"h_{branch_name}", f"Histogram of {branch_name}", len(adhoc_binning[branch_name])-1, adhoc_binning[branch_name]), branch_name, weight_column)
-
-
                 final_df = dict()
                 for (score, adhoc_sel), outfile in zip(adhoc_selection.items(), output_files):
                     fOut = ROOT.TFile(outfile, "UPDATE")
                     fOut.cd()
-                    print(f"Creating histogram for category: {outfile.split('_')[1]} and selection: {selection_name}")
+                    print(f"Creating histogram for category: {outfile.split('_')[-2]} and selection: {selection_name}")
                     hist_name = infile.split('/')[-1].replace('_tree.root','')
                     if any(x in infile for x in tt_file_names):
                         hist_name = selection_name
@@ -197,7 +183,6 @@ if __name__ == "__main__":
     parser.add_argument("--year", type=int, required=True, help="Data taking year.")
     parser.add_argument("--electron", nargs="?", const=1, type=bool, default=False, required=False, help="Process electron channel only.")
     parser.add_argument("--muon", nargs="?", const=1, type=bool, default=False, required=False, help="Process muon channel only.")
-    #parser.add_argument('--SR', nargs='?', const=1, type=bool, default=False, required=False, help="Apply SR cutoffs")
 
     args = parser.parse_args()
 
@@ -205,8 +190,6 @@ if __name__ == "__main__":
     prepended_ = "Vcb_"
     categories = ["catWcb", "catBB", "catBJ", "catCC", "catCJ", "catLF"]
     appended_ = ["_CR", "_SR"]
-
-    score_map = {"catWcb" : ["score_tt_Wcb", 10, 0., 1.], "catBB" : ["score_ttbb", 10, 0., 1.], "catBJ" : ["score_ttbj", 10, 0., 1.], "catCC" : ["score_ttcc", 10, 0., 1.], "catCJ" : ["score_ttcj", 10, 0., 1.], "catLF" : ["score_ttLF", 10, 0., 1.]}
 
     # Get input files from the input_dirs list
     input_files = []
@@ -235,21 +218,8 @@ if __name__ == "__main__":
         "fscore_ttbj"  : [f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbj > score_ttbb && score_ttbj > score_ttcc && score_ttbj > score_ttcj && score_ttbj > score_ttLF", np.array([0.,0.3,0.35,0.4,0.5,1.])],
         "fscore_ttcc"  : [f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcc > score_ttbb && score_ttcc > score_ttbj && score_ttcc > score_ttcj && score_ttcc > score_ttLF", np.array([0.,0.3,0.35,0.4,1.])],
         "fscore_ttcj"  : [f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcj > score_ttbb && score_ttcj > score_ttbj && score_ttcj > score_ttcc && score_ttcj > score_ttLF", np.array([0.,0.3,1.])],
-        "fscore_ttLF"  : [f"{eventClassificationBaseSelection} && {CR_selection} && score_ttLF > score_ttbb && score_ttLF > score_ttbj && score_ttLF > score_ttcc && score_ttLF > score_ttcj", np.array([0.,0.3,0.35,0.4,1.])]
+        "fscore_ttLF"  : [f"{eventClassificationBaseSelection} && {CR_selection} && score_ttLF > score_ttbb && score_ttLF > score_ttbj && score_ttLF > score_ttcc && score_ttLF > score_ttcj", np.array([0.,0.2,1.])]
     }
-    #adhoc_binning = {
-    #    "score_tt_Wcb" : np.array([0.,0.9,1.]),
-    #    "fscore_ttbb"  : np.array([0.,0.3,0.4,0.5,0.6,1.]),
-    #    "fscore_ttbj"  : np.array([0.,0.3,0.35,0.4,0.5,1.]),
-    #    "fscore_ttcc"  : np.array([0.,0.3,0.35,0.4,1.]),
-    #    "fscore_ttcj"  : np.array([0.,0.3,1.]),
-    #    "fscore_ttLF"  : np.array([0.,0.3,0.35,0.4,1.]),
-    #}
-
-    #if args.SR:
-    #    for selection in selections:
-    #        selections[selection] += " && score_tt_Wcb>0.6"
-    #        score_map["catWcb"] = ["score_tt_Wcb", 4, 0.6, 1.]
 
     # Apply trigger selection to separate channels if requested
     if args.electron:
@@ -275,4 +245,4 @@ if __name__ == "__main__":
                    "CMS_JES%sUp" % year : "flavTagWeight_JES_UP/flavTagWeight",
                    "CMS_JES%sDown" % year : "flavTagWeight_JES_DOWN/flavTagWeight"}    
 
-    process_trees(input_files, output_files, args.tree_name, score_map, args.year, selections, adhoc_selection, systematics)
+    process_trees(input_files, output_files, args.tree_name, args.year, selections, adhoc_selection, systematics)

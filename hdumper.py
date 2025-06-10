@@ -99,19 +99,19 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 CR_selection = "score_tt_Wcb < 0.85"
                 adhoc_selection = {
                     "score_tt_Wcb" : f"{eventClassificationBaseSelection} && {SR_selection}",
-                    "fscore_ttbb"  : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbb > score_ttbj && score_ttbb > score_ttcc && score_ttbb > score_ttcj && score_ttbb > score_ttLF",
-                    "fscore_ttbj"  : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttbj > score_ttbb && score_ttbj > score_ttcc && score_ttbj > score_ttcj && score_ttbj > score_ttLF",
-                    "fscore_ttcc"  : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcc > score_ttbb && score_ttcc > score_ttbj && score_ttcc > score_ttcj && score_ttcc > score_ttLF",
-                    "fscore_ttcj"  : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttcj > score_ttbb && score_ttcj > score_ttbj && score_ttcj > score_ttcc && score_ttcj > score_ttLF",
-                    "fscore_ttLF"  : f"{eventClassificationBaseSelection} && {CR_selection} && score_ttLF > score_ttbb && score_ttLF > score_ttbj && score_ttLF > score_ttcc && score_ttLF > score_ttcj"
+                    "fscore_ttbb"  : f"{eventClassificationBaseSelection} && {CR_selection} && {evtClassification_weights['ttbb']} * score_ttbb > {evtClassification_weights['ttbj']} * score_ttbj && {evtClassification_weights['ttbb']} * score_ttbb > {evtClassification_weights['ttcc']} * score_ttcc && {evtClassification_weights['ttbb']} * score_ttbb > {evtClassification_weights['ttcj']} * score_ttcj && {evtClassification_weights['ttbb']} * score_ttbb > {evtClassification_weights['ttLF']} * score_ttLF",
+                    "fscore_ttbj"  : f"{eventClassificationBaseSelection} && {CR_selection} && {evtClassification_weights['ttbj']} * score_ttbj > {evtClassification_weights['ttbb']} * score_ttbb && {evtClassification_weights['ttbj']} * score_ttbj > {evtClassification_weights['ttcc']} * score_ttcc && {evtClassification_weights['ttbj']} * score_ttbj > {evtClassification_weights['ttcj']} * score_ttcj && {evtClassification_weights['ttbj']} * score_ttbj > {evtClassification_weights['ttLF']} * score_ttLF",
+                    "fscore_ttcc"  : f"{eventClassificationBaseSelection} && {CR_selection} && {evtClassification_weights['ttcc']} * score_ttcc > {evtClassification_weights['ttbb']} * score_ttbb && {evtClassification_weights['ttcc']} * score_ttcc > {evtClassification_weights['ttbj']} * score_ttbj && {evtClassification_weights['ttcc']} * score_ttcc > {evtClassification_weights['ttcj']} * score_ttcj && {evtClassification_weights['ttcc']} * score_ttcc > {evtClassification_weights['ttLF']} * score_ttLF",
+                    "fscore_ttcj"  : f"{eventClassificationBaseSelection} && {CR_selection} && {evtClassification_weights['ttcj']} * score_ttcj > {evtClassification_weights['ttbb']} * score_ttbb && {evtClassification_weights['ttcj']} * score_ttcj > {evtClassification_weights['ttbj']} * score_ttbj && {evtClassification_weights['ttcj']} * score_ttcj > {evtClassification_weights['ttcc']} * score_ttcc && {evtClassification_weights['ttcj']} * score_ttcj > {evtClassification_weights['ttLF']} * score_ttLF",
+                    "fscore_ttLF"  : f"{eventClassificationBaseSelection} && {CR_selection} && {evtClassification_weights['ttLF']} * score_ttLF > {evtClassification_weights['ttbb']} * score_ttbb && {evtClassification_weights['ttLF']} * score_ttLF > {evtClassification_weights['ttbj']} * score_ttbj && {evtClassification_weights['ttLF']} * score_ttLF > {evtClassification_weights['ttcc']} * score_ttcc && {evtClassification_weights['ttLF']} * score_ttLF > {evtClassification_weights['ttcj']} * score_ttcj"
                 }
                 adhoc_binning = {
                     "score_tt_Wcb" : np.array([0.,0.9,1.]),
-                    "fscore_ttbb"  : np.array([0.,0.3,0.4,0.5,0.6,1.]),
-                    "fscore_ttbj"  : np.array([0.,0.3,0.35,0.4,0.5,1.]),
-                    "fscore_ttcc"  : np.array([0.,0.3,0.35,0.4,1.]),
+                    "fscore_ttbb"  : np.array([0.,0.7,0.9,1.]),
+                    "fscore_ttbj"  : np.array([0.,0.35,0.45,0.6,1.]),
+                    "fscore_ttcc"  : np.array([0.,0.5,1.]),
                     "fscore_ttcj"  : np.array([0.,0.3,1.]),
-                    "fscore_ttLF"  : np.array([0.,0.3,0.35,0.4,1.]),
+                    "fscore_ttLF"  : np.array([0.,0.1,1.]),
                 }
 
             final_df = dict() # Changed position of this
@@ -125,13 +125,14 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 
                 final_df[branch_name] = df_selected.Filter(adhoc_selection[branch_name]) if eventClassification else df_selected
 
-                #print("after second event selection:", final_df[branch_name].Count().GetValue())
-
                 # Create histogram
                 if eventClassification:
                     hist = final_df[branch_name].Histo1D((f"h_{branch_name}", f"Histogram of {branch_name}", len(adhoc_binning[branch_name])-1, adhoc_binning[branch_name]), branch_name, weight_column)
                 else:
                     hist = final_df[branch_name].Histo1D((f"h_{branch_name}", f"Histogram of {branch_name}", nbins, xmin, xmax), branch_name, weight_column)
+
+                print(f"Number of events after full selection: {hist.Integral()}")
+
 
                 # Write histogram to output file
                 hist.Write()
@@ -233,7 +234,7 @@ if __name__ == "__main__":
     parser.add_argument("--year", type=int, required=True, help="Data taking year.")
     parser.add_argument("--electron", nargs="?", const=1, type=bool, default=False, required=False, help="Process electron channel only.")
     parser.add_argument("--muon", nargs="?", const=1, type=bool, default=False, required=False, help="Process muon channel only.")
-    parser.add_argument("--addSelection", type=str, required=False, help="Additional selection to apply to all processes.")
+    parser.add_argument("--add_selection", type=str, required=False, help="Additional selection to apply to all processes.")
     parser.add_argument("--eventClassification", nargs="?", const=1, type=bool, default=False, required=False, help="Apply event classification selection.")
 
     args = parser.parse_args()
@@ -256,6 +257,14 @@ if __name__ == "__main__":
                  "ttLF" : " && tt_category==0 && higgs_decay==0 && wcb==0"
     }
 
+    evtClassification_weights = {"ttLF" : "0.537",
+                                 #"ttcc" : "0.018",
+                                 "ttcc" : "0.09",
+                                 "ttcj" : "0.116",
+                                 "ttbb" : "0.071",
+                                 "ttbj" : "0.156"
+    }
+
     # Apply trigger selection to separate channels if requested
     if args.electron:
         selections["base"] += " && passTrigEl"
@@ -263,9 +272,9 @@ if __name__ == "__main__":
         selections["base"] += " && passTrigMu"
 
     # Apply additional selections if specified
-    if args.addSelection:
+    if args.add_selection:
         for key in selections.keys():
-            selections[key] += f" && ({args.addSelection})"
+            selections[key] += f" && ({args.add_selection})"
 
     process_trees(input_files, output_files, args.tree_name, hist_configs, args.year, selections, args.eventClassification)
 

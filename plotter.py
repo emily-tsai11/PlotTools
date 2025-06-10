@@ -136,6 +136,8 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm, log, b
         CMS.cmsDraw(ratio, "E1X0", mcolor=ROOT.kBlack)
         ref_line = ROOT.TLine(x_low, 1, x_high, 1)
         CMS.cmsDrawLine(ref_line, lcolor = ROOT.kBlack, lstyle = ROOT.kDotted)
+        ratio_from_canvas = CMS.GetcmsCanvasHist(canvas.GetPad(2))
+        ratio_from_canvas.GetYaxis().SetRangeUser(0.5,1.5)
 
     # Save the canvas in pdf and png formats
     plot_name = f"{output_dir}{hist_name.replace('h_','')}" if not log else f"{output_dir}/log/{hist_name.replace('h_','')}"
