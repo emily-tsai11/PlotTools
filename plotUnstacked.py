@@ -219,7 +219,7 @@ def plot_purity(input_files, output_dir):
     print("")
 
 
-def plot_purity_multiregion(input_files, output_dir):
+def plot_purity_multiregion(input_files, output_dir, raw_evt_number=False):
     """
     Plots the fraction of events of a given process over the total in the category that should constrain such process.
 
@@ -230,18 +230,23 @@ def plot_purity_multiregion(input_files, output_dir):
 
     # Dictionary to hold the weighted number of events for each process in a given category (first array element)
     # and the total number of events in the same category (second array element).
-    process = {"h_score_tt_Wcb_AR" : np.array([0.,0.]),
+    process = {"h_score_tt_Wcb_CR" : np.array([0.,0.]),
                "h_score_tt_Wcb_SR" : np.array([0.,0.]),
-               "h_score_ttLF_AR" : np.array([0.,0.]),
+               "h_score_ttLF_CR" : np.array([0.,0.]),
                "h_score_ttLF_SR" : np.array([0.,0.]),
-               "h_score_ttbb_AR" : np.array([0.,0.]),
+               "h_score_ttbb_CR" : np.array([0.,0.]),
                "h_score_ttbb_SR" : np.array([0.,0.]),
-               "h_score_ttbj_AR" : np.array([0.,0.]),
+               "h_score_ttbj_CR" : np.array([0.,0.]),
                "h_score_ttbj_SR" : np.array([0.,0.]),
-               "h_score_ttcc_AR" : np.array([0.,0.]),
+               "h_score_ttcc_CR" : np.array([0.,0.]),
                "h_score_ttcc_SR" : np.array([0.,0.]),
-               "h_score_ttcj_AR" : np.array([0.,0.]),
-               "h_score_ttcj_SR" : np.array([0.,0.])}
+               "h_score_ttcj_CR" : np.array([0.,0.]),
+               "h_score_ttcj_SR" : np.array([0.,0.]),
+               "h_fscore_ttLF_CR" : np.array([0.,0.]),
+               "h_fscore_ttbb_CR" : np.array([0.,0.]),
+               "h_fscore_ttbj_CR" : np.array([0.,0.]),
+               "h_fscore_ttcc_CR" : np.array([0.,0.]),
+               "h_fscore_ttcj_CR" : np.array([0.,0.])}
 
     for infile in input_files:
         print(f"Processing file: {infile}")
@@ -261,9 +266,13 @@ def plot_purity_multiregion(input_files, output_dir):
             proc_region = hist_name.split('_')[-1]
             if not proc_region in infile:
                 continue
+            if "fscore" in hist_name and not "fscore" in infile:
+                continue
+            if not "Wcb" in proc_name:
+                if "fscore" in infile and not "fscore" in hist_name:
+                    continue
 
             print(f"Processing histogram: {hist_name} for process: {proc_name} in region: {proc_region}")
-            #hist_name = hist_name.replace('_' + proc_region, '')
 
             if "Wcb" in proc_name:
                 proc_name = "ttWcb"
@@ -280,16 +289,23 @@ def plot_purity_multiregion(input_files, output_dir):
                 process[hist_name][0] += hist_clone.Integral() 
             process[hist_name][1] += hist_clone.Integral()
 
-    labels_AR = [key for key in process.keys() if 'AR' in key]
+    labels_CR = [key for key in process.keys() if ('CR' in key) and ('fscore' not in key)]
+    labels_fscores = [key for key in process.keys() if 'fscore' in key or "Wcb_CR" in key]
     labels_SR = [key for key in process.keys() if 'SR' in key]
 
     # Create matplotlib histogram with six bins, one for each process
-    values_AR = [process[proc][0] / process[proc][1] if process[proc][1] > 0 else 0 for proc in labels_AR]
-    values_SR = [process[proc][0] / process[proc][1] if process[proc][1] > 0 else 0 for proc in labels_SR]
+    if raw_evt_number:
+        values_CR = [process[proc][0] for proc in labels_CR]
+        values_SR = [process[proc][0] for proc in labels_SR]
+        values_CR_fscores = [process[proc][0] for proc in labels_fscores]
+    else:
+        values_CR = [process[proc][0] / process[proc][1] if process[proc][1] > 0 else 0 for proc in labels_CR]
+        values_SR = [process[proc][0] / process[proc][1] if process[proc][1] > 0 else 0 for proc in labels_SR]
+        values_CR_fscores = [process[proc][0] / process[proc][1] if process[proc][1] > 0 else 0 for proc in labels_fscores]
 
 
-    labels = [label.replace('h_score_', '') for label in labels_AR]  # Remove 'h_score_' prefix for better readability
-    labels = [label.replace('_AR', '') for label in labels]  # Remove the "_AR" suffix
+    labels = [label.replace('h_score_', '') for label in labels_CR]  # Remove 'h_score_' prefix for better readability
+    labels = [label.replace('_CR', '') for label in labels]  # Remove the "_CR" suffix
     labels = [label.replace('tt_Wcb', 'Wcb') for label in labels]  # Replace 'ttWcb' with 'Wcb'
     labels = [label.replace('ttLF', 'tt+LF') for label in labels]  # Replace 'ttLF' with 'tt+LF'
     labels = [label.replace('ttbb', 'tt+bb') for label in labels]  # Replace 'ttbb' with 'tt+bb'
@@ -303,20 +319,28 @@ def plot_purity_multiregion(input_files, output_dir):
     hep.style.use("CMS")
     fig, ax = plt.subplots(figsize=(10, 10))
     hep.cms.label("Work in progress", loc=2, ax=ax, lumi="59.8")
-    # Plot two sets of bars for AR and SR
-    bars_AR = ax.bar(x - width/2, values_AR, width, label='Purity in AR')
-    bars_SR = ax.bar(x + width/2, values_SR, width, label='Purity in SR')
-    # Add legend
-    ax.legend()
+    # Plot two sets of bars for CR and SR
+    bars_CR = ax.bar(x - width/3, values_CR, width, label='Purity in CR')
+    #print(f"Purity in CR fscores: {values_CR_fscores}")
+    #print(f"Purity in CR: {values_CR}")
+    bars_fscores = ax.bar(x, values_CR_fscores, width, label='Purity in CR-fscores')
+    bars_SR = ax.bar(x + width/3, values_SR, width, label='Purity in SR')
+    # Add legend and move it down
+    ax.legend(loc='center right')#, bbox_to_anchor=(0.5, -0.15))
 
     ax.set_ylabel('Purity')
     ax.set_xlabel('NN category')
     plt.xticks(x, labels, rotation=-20 , ha='center')
-    plt.ylim(0, 1)
+    if not raw_evt_number:
+        plt.ylim(0, 1)
 
     # Save the plot
-    output_file_png = os.path.join(output_dir, f'purity_ARSR.png')
-    output_file_pdf = os.path.join(output_dir, f'purity_ARSR.pdf')
+    if raw_evt_number:
+        output_file_png = os.path.join(output_dir, f'raw_evt_number_CRSR.png')
+        output_file_pdf = os.path.join(output_dir, f'raw_evt_number_CRSR.pdf')
+    else:
+        output_file_png = os.path.join(output_dir, f'purity_CRSR.png')
+        output_file_pdf = os.path.join(output_dir, f'purity_CRSR.pdf')
     plt.savefig(output_file_png)
     plt.savefig(output_file_pdf)
     plt.close()
@@ -333,6 +357,7 @@ if __name__ == "__main__":
     parser.add_argument("--log", nargs="?", const=1, type=bool, default=False, required=False, help="Decide whether to use log scale on the Y-axis.")
     parser.add_argument("--purity", nargs="?", const=1, type=bool, default=False, required=False, help="Decide whether to plot purity.")
     parser.add_argument("--multiRegion", nargs="?", const=1, type=bool, default=False, required=False, help="Decide whether to plot the purity for multiple regions.")
+    parser.add_argument("--raw_evt_number", nargs="?", const=1, type=bool, default=False, required=False, help="Decide whether to plot the raw event numbers.")
 
     args = parser.parse_args()
 
@@ -342,7 +367,7 @@ if __name__ == "__main__":
 
     # Get input files from the input_dir
     if args.multiRegion:
-        input_files = glob.glob(f"{args.input_dir}/AR/*.root") + glob.glob(f"{args.input_dir}/SR/*.root")
+        input_files = glob.glob(f"{args.input_dir}/CR/*.root") + glob.glob(f"{args.input_dir}/SR/*.root") + glob.glob(f"{args.input_dir}/CRfscores/*.root")
 
     else:
         input_files = glob.glob(f"{args.input_dir}*.root")
@@ -353,7 +378,7 @@ if __name__ == "__main__":
     # Plot either all histograms from the csv file or a single histogram. Decide whether to plot purity.
     if args.purity:
         if args.multiRegion:
-            plot_purity_multiregion(input_files, args.output_dir)
+            plot_purity_multiregion(input_files, args.output_dir, args.raw_evt_number)
         else:
             plot_purity(input_files, args.output_dir)
 
