@@ -24,7 +24,7 @@ def fixNegativeBins(filename, keep_original=True):
             if h.IsA().InheritsFrom(ROOT.TH1.Class()):
                 for i in range(1, h.GetNbinsX() + 1):
                     if h.GetBinContent(i) < 0:
-                        # print('!!!', dirname, name, i, h.GetBinContent(i), '+/-', h.GetBinError(i))
+                        print('!!!', dirname, name, i, h.GetBinContent(i), '+/-', h.GetBinError(i))
                         h.SetBinContent(i, 0)
                     # protect against negative -1 sigma uncertainty
                     if h.GetBinError(i) > h.GetBinContent(i) and not (name.endswith('Up') or name.endswith('Down')):

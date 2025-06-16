@@ -35,19 +35,19 @@ datacard_dict = {"Vcb_catWcb_SR" : {
                 "distribution" : "score_tt_Wcb",
                 },
                 "Vcb_catBB_CR" : {
-                "distribution" : "score_ttbb",
+                "distribution" : "fscore_ttbb",
                 },
                 "Vcb_catBJ_CR" : {
-                "distribution" : "score_ttbj",
+                "distribution" : "fscore_ttbj",
                 },
                 "Vcb_catCC_CR" : {
-                "distribution" : "score_ttcc",
+                "distribution" : "fscore_ttcc",
                 },
                 "Vcb_catCJ_CR" : {
-                "distribution" : "score_ttcj",
+                "distribution" : "fscore_ttcj",
                 },
                 "Vcb_catLF_CR" : {
-                "distribution" : "score_ttLF",
+                "distribution" : "fscore_ttLF",
                 },
 }
 
@@ -134,6 +134,7 @@ shapeSysts = {
     #'$PROCESS_CMS_PS_fsr_%s' % year: tt_components + ttH_modes + list(signal.keys()),
     #'$PROCESS_CMS_LHE_weights_scale_muF_%s' % year: tt_components + ttH_modes + list(signal.keys()),
     #'$PROCESS_CMS_LHE_weights_scale_muR_%s' % year: tt_components + ttH_modes + list(signal.keys()),
+
     'CMS_JER%s' % year : all_procs,
     'CMS_JES%s' % year : all_procs,
 }
@@ -155,6 +156,11 @@ cb.WriteDatacard(outputCardName, outputShapesName)
 #Fix negative bins in the shape file. Negative bin contents are set to zero. Uncertainties larger than the bin content are set to the bin content.
 fixNegativeBins(outputShapesName, False)
 
+# Now produce a new datacard with the negative bins fixed
+cb_fixed = ch.CombineHarvester()
+cb_fixed.ParseDatacard(outputCardName)
+cb_fixed.WriteDatacard(outputCardName, outputShapesName)
+
 # Create workspace with specific model and POI definitions
 print ("Test datacards and create workspace for " + year + "!")
 # Note that 0.00085 is the ratio of Br(W->cb)/Br(W->qq' - cb) using the PDG values. BR(W->cb) = 0.00085 and BR(W->qq') = 0.6741
@@ -162,7 +168,7 @@ workspace_name = outputCardName.replace(".txt", ".root")
 print("Workspace name: " + workspace_name)
 workspace_name = workspace_name.replace("/Vcb","/workspace_Vcb")
 print("Workspace name: " + workspace_name)
-command = "text2workspace.py " + outputCardName + " -o " + workspace_name + " -m 125.38 -v 0 -P HiggsAnalysis.CombinedLimit.PhysicsModel:multiSignalModel --PO verbose --channel-masks --PO 'map=.*/ttbb:rate_tt[1.,-1.,2.]' --PO 'map=.*/ttbj:rate_tt[1.,-1.,2.]' --PO 'map=.*/ttcc:rate_tt[1.,-1.,2.]' --PO 'map=.*/ttcj:rate_tt[1.,-1.,2.]' --PO 'map=.*/ttLF:rate_tt[1.,-1.,2.]' --PO 'map=.*/ttWcb:rate_ttWcb=expr;;rate_ttWcb(\"@0*@1*1/(0.00085*(1-@1)+1)\",rate_tt,rate_ratio[1,-1.,2.])'"
+command = "text2workspace.py " + outputCardName + " -o " + workspace_name + " -m 125.38 -v 0 -P HiggsAnalysis.CombinedLimit.PhysicsModel:multiSignalModel --PO verbose --channel-masks --PO 'map=.*/ttbb:rate_tt[1.,-1.,2.]' --PO 'map=.*/ttbj:rate_tt[1.,-1.,2.]' --PO 'map=.*/ttcc:rate_tt[1.,-1.,2.]' --PO 'map=.*/ttcj:rate_tt[1.,-1.,2.]' --PO 'map=.*/ttLF:rate_tt[1.,-1.,2.]' --PO 'map=.*/ttWcb:rate_ttWcb=expr;;rate_ttWcb(\"@0*@1*@1*1./(0.00085*(1.-@1*@1)+1.)\",rate_tt,rate_ratio[1,-1.,2.])'"
 print(command)
 subprocess.call(command, shell=True)
 

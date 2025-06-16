@@ -1,0 +1,7 @@
+Variable, nbins, xmin, xmax
+score_tt_Wcb, 10, 0., 1.
+fscore_ttLF, 10, 0., 1.
+fscore_ttbb, 10, 0., 1.
+fscore_ttbj, 10, 0., 1.
+fscore_ttcc, 10, 0., 1.
+fscore_ttcj, 10, 0., 1.

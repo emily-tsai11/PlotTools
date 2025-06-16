@@ -107,7 +107,7 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm, log, b
     #Draw the stack in log scale
     if log: 
         ROOT.gPad.SetLogy()
-        hist_from_canvas.GetYaxis().SetRangeUser(0.01,max(stack.GetHistogram().GetMaximum(),data_hist.GetMaximum()) * 1000)
+        hist_from_canvas.GetYaxis().SetRangeUser(0.0001,max(stack.GetHistogram().GetMaximum(),data_hist.GetMaximum()) * 10000)
         if sonly:
             hist_from_canvas.GetYaxis().SetRangeUser(0.01,sig_hist.GetMaximum() * 1000)
 

@@ -22,7 +22,6 @@ def plot_unstacked(input_files, hist_name, output_dir, normalization=1, log=Fals
     # Create a figure for plotting
     plt.figure(figsize=(10, 6))
     # Set the style for the plot
-    #CMS.SetStyle()
 
     #canvas = ROOT.TCanvas("canvas", "canvas", 800, 600)
 

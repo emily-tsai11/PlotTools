@@ -49,6 +49,19 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
             df = df.Define("fscore_ttcc", "score_ttcc / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
             df = df.Define("fscore_ttcj", "score_ttcj / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
             df = df.Define("fscore_ttLF", "score_ttLF / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+        else:
+            df = df.Define("ak4_1_pt", "ak4_pt.size() > 0 ? ak4_pt[0] : 0") \
+                .Define("ak4_1_phi",   "ak4_phi.size() > 0 ? ak4_phi[0] : 0") \
+                .Define("ak4_1_eta",   "ak4_eta.size() > 0 ? ak4_eta[0] : 0") \
+                .Define("ak4_2_pt",    "ak4_pt.size() > 1 ? ak4_pt[1] : 0") \
+                .Define("ak4_2_phi",   "ak4_phi.size() > 1 ? ak4_phi[1] : 0") \
+                .Define("ak4_2_eta",   "ak4_eta.size() > 1 ? ak4_eta[1] : 0") \
+                .Define("ak4_3_pt",    "ak4_pt.size() > 2 ? ak4_pt[2] : 0") \
+                .Define("ak4_3_phi",   "ak4_phi.size() > 2 ? ak4_phi[2] : 0") \
+                .Define("ak4_3_eta",   "ak4_eta.size() > 2 ? ak4_eta[2] : 0") \
+                .Define("ak4_4_pt",    "ak4_pt.size() > 3 ? ak4_pt[3] : 0") \
+                .Define("ak4_4_phi",   "ak4_phi.size() > 3 ? ak4_phi[3] : 0") \
+                .Define("ak4_4_eta",   "ak4_eta.size() > 3 ? ak4_eta[3] : 0")
 
         tt_file_names = ["ttbb-4f", "ttbb-dps", "ttbar-powheg"]
         tt4f_strings = ["ttbb", "ttbj"]
@@ -107,15 +120,15 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 }
                 adhoc_binning = {
                     "score_tt_Wcb" : np.array([0.,0.9,1.]),
-                    "fscore_ttbb"  : np.array([0.,0.7,0.9,1.]),
-                    "fscore_ttbj"  : np.array([0.,0.35,0.45,0.6,1.]),
-                    "fscore_ttcc"  : np.array([0.,0.5,1.]),
-                    "fscore_ttcj"  : np.array([0.,0.3,1.]),
-                    "fscore_ttLF"  : np.array([0.,0.1,1.]),
+                    "fscore_ttbb"  : np.array([0.,0.5,0.7,1.]),
+                    "fscore_ttbj"  : np.array([0.,0.4,0.5,1.]),
+                    "fscore_ttcc"  : np.array([0.,0.3,1.]),
+                    "fscore_ttcj"  : np.array([0.,0.4,1.]),
+                    "fscore_ttLF"  : np.array([0.,0.1,0.4,1.]),
                 }
 
-            final_df = dict() # Changed position of this
             # Create histograms for each branch
+            final_df = dict()
             for hist_config in hist_configs:
                 branch_name = hist_config['branch']
                 nbins = int(hist_config['nbins'])
@@ -131,7 +144,7 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 else:
                     hist = final_df[branch_name].Histo1D((f"h_{branch_name}", f"Histogram of {branch_name}", nbins, xmin, xmax), branch_name, weight_column)
 
-                print(f"Number of events after full selection: {hist.Integral()}")
+                #print(f"Number of events after full selection: {hist.Integral()}")
 
 
                 # Write histogram to output file
@@ -158,6 +171,7 @@ def read_csv(csv_file):
             {'branch': line[0], 'nbins': line[1], 'xmin': line[2], 'xmax': line[3]}
             for line in csv_reader if not line[0] == 'Variable'
         ]
+    # Note: the csv file must NOT contain empty lines.
 
     return dict_list
 
@@ -257,6 +271,7 @@ if __name__ == "__main__":
                  "ttLF" : " && tt_category==0 && higgs_decay==0 && wcb==0"
     }
 
+    # These weights correspond (roughly) to the fraction of events of a certain process expected in the corresponding category after the ttWcb score selection.
     evtClassification_weights = {"ttLF" : "0.537",
                                  #"ttcc" : "0.018",
                                  "ttcc" : "0.09",
