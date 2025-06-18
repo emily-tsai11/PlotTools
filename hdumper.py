@@ -44,11 +44,13 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
         if eventClassification:
             print(f"{Fore.YELLOW}Running in event classification mode. Will define a series of fractional scores.{Style.RESET_ALL}")
             # Define the fractional scores
-            df = df.Define("fscore_ttbb", "score_ttbb / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
-            df = df.Define("fscore_ttbj", "score_ttbj / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
-            df = df.Define("fscore_ttcc", "score_ttcc / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
-            df = df.Define("fscore_ttcj", "score_ttcj / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
-            df = df.Define("fscore_ttLF", "score_ttLF / (score_ttbb + score_ttbj + score_ttcc + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_ttbb", "score_ttbb / (score_ttbb + score_tt2b + score_ttbj + score_ttcc + score_tt2c + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_tt2b", "score_tt2b / (score_ttbb + score_tt2b + score_ttbj + score_ttcc + score_tt2c + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_ttbj", "score_ttbj / (score_ttbb + score_tt2b + score_ttbj + score_ttcc + score_tt2c + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_ttcc", "score_ttcc / (score_ttbb + score_tt2b + score_ttbj + score_ttcc + score_tt2c + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_tt2c", "score_tt2c / (score_ttbb + score_tt2b + score_ttbj + score_ttcc + score_tt2c + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_ttcj", "score_ttcj / (score_ttbb + score_tt2b + score_ttbj + score_ttcc + score_tt2c + score_ttcj + score_ttLF)")
+            df = df.Define("fscore_ttLF", "score_ttLF / (score_ttbb + score_tt2b + score_ttbj + score_ttcc + score_tt2c + score_ttcj + score_ttLF)")
         else:
             df = df.Define("ak4_1_pt", "ak4_pt.size() > 0 ? ak4_pt[0] : 0") \
                 .Define("ak4_1_phi",   "ak4_phi.size() > 0 ? ak4_phi[0] : 0") \
@@ -106,6 +108,7 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 df_selected = df_selected.Define(weight_column, "1")
 
             # Define event classification for the dedicated mode
+            # TODO: probably need to add more cuts for 8 classes selection!
             if eventClassification:
                 eventClassificationBaseSelection = "score_tt_Wcb > 0.6 && score_ttLF < 0.05"
                 SR_selection = "score_tt_Wcb > 0.85"
@@ -121,8 +124,10 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 adhoc_binning = {
                     "score_tt_Wcb" : np.array([0.,0.9,1.]),
                     "fscore_ttbb"  : np.array([0.,0.5,0.7,1.]),
+                    "fscore_tt2b"  : np.array([0.,1.]),
                     "fscore_ttbj"  : np.array([0.,0.4,0.5,1.]),
                     "fscore_ttcc"  : np.array([0.,0.3,1.]),
+                    "fscore_tt2c"  : np.array([0.,1.]),
                     "fscore_ttcj"  : np.array([0.,0.4,1.]),
                     "fscore_ttLF"  : np.array([0.,0.1,0.4,1.]),
                 }
@@ -263,15 +268,18 @@ if __name__ == "__main__":
     # Prepare histogram configurations for each branch
     hist_configs = read_csv(args.input_csv)
 
-    selections = {"base": "n_ak4>=4 && (n_btagM+n_ctagM)>=3 && n_btagM>=1",
+    selections = {"base": "n_ak4>=3 && (n_btagM+n_ctagM)>=3 && n_btagM>=1", # Changed n_ak4 from 4 to 3
                  "ttbb" : " && genEventClassifier==9 && wcb==0",
-                 "ttbj" : " && (genEventClassifier==7 || genEventClassifier==8) && wcb==0",
+                 "tt2b" : " && genEventClassifier==8 && wcb==0",
+                 "ttbj" : " && genEventClassifier==7 && wcb==0",
                  "ttcc" : " && genEventClassifier==6 && wcb==0",
-                 "ttcj" : " && (genEventClassifier==4 || genEventClassifier==5) && wcb==0",
+                 "tt2c" : " && genEventClassifier==5 && wcb==0",
+                 "ttcj" : " && genEventClassifier==4 && wcb==0",
                  "ttLF" : " && tt_category==0 && higgs_decay==0 && wcb==0"
     }
 
     # These weights correspond (roughly) to the fraction of events of a certain process expected in the corresponding category after the ttWcb score selection.
+    # TODO: add more weights for the 8 classes
     evtClassification_weights = {"ttLF" : "0.537",
                                  #"ttcc" : "0.018",
                                  "ttcc" : "0.09",
