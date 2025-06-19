@@ -92,7 +92,7 @@ def stack_histograms(input_files, hist_name, output_dir, sonly, sig_norm, log, b
     if not sonly and not isBlind:
         legend.AddEntry(data_hist, "Data", "pe")
     legend.AddEntry(sig_hist, f"W#rightarrow cb #times {sig_norm}", "l")
-    for mc_hist in phys_process:
+    for mc_hist in reversed(phys_process):
         legend.AddEntry(mc_hist[0], mc_hist[1], "f")
 
     stack = CMS.buildTHStack([mc_hist[0] for mc_hist in phys_process])
