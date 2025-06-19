@@ -66,8 +66,8 @@ def process_trees(input_files, output_files, tree_name, hist_configs, year, sele
                 .Define("ak4_4_eta",   "ak4_eta.size() > 3 ? ak4_eta[3] : 0")
 
         tt_file_names = ["ttbb-4f", "ttbb-dps", "ttbar-powheg"]
-        tt4f_strings = ["ttbb", "ttbj"]
-        tt_strings   = ["ttcc", "ttcj", "ttLF"]
+        tt4f_strings = ["ttbb", "tt2b", "ttbj"]
+        tt_strings   = ["ttcc", "tt2c", "ttcj", "ttLF"]
 
         # Assign event weight based on data taking year and process type
         weight = assign_event_weight(year, infile)
@@ -308,6 +308,8 @@ if __name__ == "__main__":
     merge_files(args.output_dir, ttH_list, "h_ttH-ttV.root")
     ttbb_list = ["h_ttbb-4f_ttbb.root", "h_ttbb-dps_ttbb.root"]
     merge_files(args.output_dir, ttbb_list, "h_ttbb-withDPS.root")
+    tt2b_list = ["h_ttbb-4f_tt2b.root", "h_ttbb-dps_tt2b.root"]
+    merge_files(args.output_dir, tt2b_list, "h_tt2b-withDPS.root")
     ttbj_list = ["h_ttbb-4f_ttbj.root", "h_ttbb-dps_ttbj.root"]
     merge_files(args.output_dir, ttbj_list, "h_ttbj-withDPS.root")
     ttbb_list = ["h_TWZ.root", "h_diboson.root"]
