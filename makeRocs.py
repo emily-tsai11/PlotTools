@@ -191,6 +191,7 @@ def create_output_dir(output_dir, log):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Stack TH1D histograms from multiple ROOT files.")
     parser.add_argument("--input_dir", type=str, required=True, help="Input directory, where ROOT files are located.")
+    parser.add_argument("--output_dir", type=str, required=True, help="Output directory, where plots will be stored.")
     parser.add_argument("--hist_name", type=str, required=False, help="Name of the histogram to read.")
     parser.add_argument("--sig_name", type=str, required=False, help="Name of the signal process.")
     parser.add_argument("--bkg_names", nargs='+', required=False, help="List of background process names.")
@@ -199,7 +200,7 @@ if __name__ == "__main__":
 
     # Set plotting details
     CMS.SetExtraText("Work in progress")
-    CMS.SetLumi("59.83")
+    CMS.SetLumi(59.83)
 
     # Get input files from the input_dir
     input_files = glob.glob(f"{args.input_dir}*.root")
@@ -240,5 +241,5 @@ if __name__ == "__main__":
             roc.SetLineColor(i+2)
             roc.Draw("L")
     legend.Draw("SAME")
-    canvas_roc.SaveAs(f"roc_curve_tagger_performance.pdf")
-    canvas_roc.SaveAs(f"roc_curve_tagger_performance.png")
+    canvas_roc.SaveAs(f"{args.output_dir}/roc_curve_tagger_performance.pdf")
+    canvas_roc.SaveAs(f"{args.output_dir}/roc_curve_tagger_performance.png")

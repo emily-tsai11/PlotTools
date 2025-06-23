@@ -20,7 +20,7 @@ if not os.path.exists(outdir):
     os.makedirs(outdir)
 
 channel = "SL"
-bkgs = ["singletop", "ttbb-dps", "ttbb", "ttbj", "ttcc", "ttcj", "ttLF", "wjets", "ttZ", "ttW", "diboson", "ttHbb", "ttHcc"]
+bkgs = ["singletop", "ttbb-dps", "ttbb", "ttbj", "ttcc", "ttcj", "ttLF", "w-fxfx", "ttZ", "ttW", "diboson", "ttHbb", "ttHcc"]
 signal = ["ttWcb"]
 tt_components = ['ttbb', 'ttbj', 'ttbb-dps' ,'ttcc', 'ttcj', 'ttLF']
 ttH_modes = ['ttHbb', 'ttHcc']

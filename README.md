@@ -1,23 +1,19 @@
 Plotting tools for the |Vcb| measurement - but not only!
 
+# Setup
+
+Follow the setup instructions for `Combine v10 ` [here](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/latest/#within-cmssw-recommended-for-cms-users), compatible with `CMSSW_14_1_0_pre4`.
+
 # Examples
 
-Create histograms for plotting:
-```
-python3 hdumper.py --input_dirs /eos/cms/store/cmst3/group/top/rsalvatico/29012025_2018_1L/data/ --output_dir histos_02022025_scores/ --tree_name Events --input_csv hconfig_minimal.csv --year 2018
-```
+Create histograms for plotting --- see `run_hdumper.sh` and `run_hdumper_fscores.sh`.
 
-Create plots:
-```
-python3 plotter.py --input_dir histos_02022025_noExtra4Fweight/SR/ --output_dir plots_02022025_noExtra4Fweight/SR/ --input_csv hconfig.csv --sig_norm 5 --blind
-```
+Create plots --- see `run_plotter.sh` and `run_plotUnstacked`.
 
-Make ROC curves for different score definitions:
-```
-python3 estimateCut.py --input_dir histos_02022025_scores/ --hist_name h_score_tt_Wcb h_fractional_score
-```
+Make ROC curves for different score definitions -- see `run_makeRocs.sh`.
 
-Prepare histograms with shape variations for CombineHarvester:
-```
-python3 prepareHistosForCards.py --input_dirs /eos/cms/store/cmst3/group/top/rsalvatico/29012025_2018_1L/mc/ --output_dir test/ --tree_name Events --year 2018
-```
+Prepare histograms with shape variations for CombineHarvester -- see `run_prepareHistosForCards.sh`.
+
+Prepare datacards -- see `run_prepareDatacards.sh`.
+
+Example command for running Combine -- see `run_combine.sh`.
