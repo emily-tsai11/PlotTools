@@ -1,0 +1,15 @@
+ <<< Combine >>> 
+ <<< v10.6.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+interpreting xsec_tt* as regex 
+Set Default Value of Parameter lumiscale To : 27.27
+interpreting xsec_tt* as regex 
+Set Default Value of Parameter r To : 1
+>>> 0 out of 8 channels masked
+
+Doing initial fit: 
+
+ --- MultiDimFit ---
+best fit parameter values and profile-likelihood uncertainties: 
+   r :    +1.000   -0.136/+0.156 (68%)

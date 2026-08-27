@@ -1,0 +1,16 @@
+ <<< Combine >>> 
+ <<< v10.6.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is Significance
+Missing background ModelConfig 'ModelConfig_bonly' in workspace 'w' in file /afs/cern.ch/work/s/sewuchte/private/VCB/CMSSW_15_0_10/src/PlotTools/input_projection/scenario_3000/workspace_S3.root
+Will make one from the signal ModelConfig 'ModelConfig' setting signal strength 'r' to zero
+interpreting xsec_tt* as regex 
+Set Default Value of Parameter lumiscale To : 27.27
+interpreting xsec_tt* as regex 
+Set Default Value of Parameter r To : 1
+>>> 0 out of 8 channels masked
+
+
+ -- Significance -- 
+Significance: 6.94569
+>> combine workspace_S3.root --cminDefaultMinimizerTolerance 0.1 --cminDefaultMinimizerStrategy 1 --setParameters lumiscale=27.27,rgx{xsec_tt*}=1.,r=1 --X-rtd MINIMIZER_MaxCalls=999999999 --cminDefaultMinimizerPrecision 1E-12 --X-rtd FAST_VERTICAL_MORPH -t -1 --X-rtd REMOVE_CONSTANT_ZERO_POINT=1 --cminPreScan --cminPreFit 1 --redefineSignalPOIs r --freezeParameters rgx{prop.*},r -M Significance -m 125.38 --setParameterRanges rgx{xsec_tt*}=0.,2. -n _nominal_exp_sig_S3

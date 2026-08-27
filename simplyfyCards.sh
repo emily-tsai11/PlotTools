@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# folderIn=RiccardoTemplates
+# folderIn=RiccardoTemplatesNew
+# folderIn=Datacards_280426
+# folderIn=Datacards_280426_smoothed
+# folderIn=Datacards_280426_trial1
+# folderIn=Datacards_290426_correctedBnormalization
+# folderIn=Datacards_290426_correctedBnormalization_noPeterson
+# folderIn=Datacards_040526_fixes
+# folderIn=Datacards_070526_ge2bge1c
+# folderIn=Datacards_070526_ge2bge1c_fix
+# folderIn=Datacards_070526_CRttWcbM0p2m0p8
+# folderIn=Datacards_070526_ge2bge1c_fix_smoothed
+# folderIn=Datacards_070526_CRttWcbM0p2m0p8_smoothed
+# folderIn=Datacards_080526_ge2bge1c_fix_clean
+# folderIn=Datacards_080526_ge2bge1c_fix_clean_pseudoData5FS
+# folderIn=Datacards_100626_ge2bge1c_fix_clean_pseudoData5FS
+# folderIn=Datacards_100626_ge2bge1c_fix_clean_forJME
+# folderIn=Datacards_100626_ge2bge1c_fix_clean_onlySurvivingVeto
+# folderIn=Datacards_190826_clean
+# folderIn=Datacards_250826_preUnblinding
+# folderIn=Datacards_250826_preUnblinding_nonSmoothed
+folderIn=Datacards_250826_preUnblinding_noFlavTagSymm
+
+
+
+folderOut=${folderIn}_simplified
+
+mkdir -p ${folderOut}
+
+declare -a StringArray=("2024")
+
+for year in ${StringArray[@]}; do
+	for channel in SL
+	do
+		echo ${folderIn}/Vcb_${channel}_${year}.txt
+		echo ${folderIn}/validateJson_${year}_${channel}.json
+		echo simplify_${year}_${channel}.log
+		echo ShapeOutSimp_${year}_${channel}.root
+		echo ${folderOut}
+		echo python3 -u analysis/simplifyDatacards.py -d ${folderIn}/Vcb_${channel}_${year}.txt --directory ${folderOut} -j ${folderIn}/validateJson_${year}_${channel}.json -o ShapeOutSimp_${year}_${channel}.root
+		nohup python3 -u analysis/simplifyDatacards.py -d ${folderIn}/Vcb_${channel}_${year}.txt --directory ${folderOut} -j ${folderIn}/validateJson_${year}_${channel}.json -o ShapeOutSimp_${year}_${channel}.root &> ${folderOut}/simplify_${year}_${channel}.log &
+		# python3 -u analysis/simplifyDatacards.py -d ${folderIn}/Vcb_${channel}_${year}.txt --directory ${folderOut} -j ${folderIn}/validateJson_${year}_${channel}.json -o ShapeOutSimp_${year}_${channel}.root
+	done
+done

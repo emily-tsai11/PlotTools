@@ -1,0 +1,52 @@
+380 shared parameters, 67 combine-only, 1 rabbit-only
+  combine-only: ['prop_binVcb_cat2B_CR_bin0', 'prop_binVcb_cat2B_CR_bin1', 'prop_binVcb_cat2B_CR_bin2', 'prop_binVcb_cat2B_CR_bin3', 'prop_binVcb_cat2B_CR_bin4', 'prop_binVcb_cat2B_CR_bin5', 'prop_binVcb_cat2B_CR_bin6', 'prop_binVcb_cat2B_CR_bin7', 'prop_binVcb_cat2C_CR_bin0', 'prop_binVcb_cat2C_CR_bin1', 'prop_binVcb_cat2C_CR_bin2', 'prop_binVcb_cat2C_CR_bin3'] ...
+  rabbit-only : ['tt-vcb']
+
+  |dvalue|/sigma : max 3.600  median 0.0068
+  error ratio    : min 0.589  max 1.857  median 1.0000
+
+  85 parameters outside tolerance (dv/sigma > 0.05, |ratio-1| > 0.05)
+
+parameter                                         combine             rabbit   dv/sig  err ratio
+CMS_flavTag_Stat_flavC_C2_2024           -0.0911+-0.1282     0.3705+-0.2381     3.600      1.857
+jes_BBEC1_2024                           -0.7833+-0.5888     0.8940+-0.7416     2.849      1.260
+xsec_tt2c                                 1.4121+-0.2861     0.8159+-0.3162    -2.084      1.105
+xsec_ttcc                                 1.0055+-0.2449     0.7998+-0.1561    -0.840      0.638
+CMS_flavTag_Stat_flavL_B0_2024            0.3826+-0.4845     0.7459+-0.4009     0.750      0.828
+CMS_flavTag_Stat_flavC_C1_2024           -0.1978+-0.2059    -0.0495+-0.1213     0.720      0.589
+norm_wjets                                1.5328+-0.8309     0.9527+-0.8451    -0.698      1.017
+xsec_ttLF                                 0.9180+-0.0824     0.8623+-0.0542    -0.676      0.658
+xsec_ttbb                                 0.8727+-0.1416     0.7859+-0.1042    -0.613      0.735
+xsec_tt2b                                 1.1395+-0.2267     1.0130+-0.1849    -0.558      0.816
+jes_Absolute                             -0.2996+-0.6863     0.0739+-1.2432     0.544      1.811
+CMS_flavTag_Stat_flavC_B0_2024            0.3491+-0.2876     0.4895+-0.3719     0.488      1.293
+met                                       1.3039+-0.6183     1.0412+-0.6704    -0.425      1.084
+xsec_ttbj                                 1.4456+-0.3103     1.3375+-0.2494    -0.349      0.804
+CMS_pileup_2024                           0.3737+-0.9790     0.6500+-0.9423     0.282      0.963
+jes_FlavorQCD                            -0.1735+-1.0355     0.0993+-1.0863     0.263      1.049
+jes_BBEC1                                 0.0054+-0.6304    -0.1446+-0.7814    -0.238      1.240
+CMS_flavTag_Stat_flavL_C4_2024            0.8866+-0.5477     1.0165+-0.5559     0.237      1.015
+CMS_flavTag_Stat_flavC_B1_2024            0.5137+-0.5843     0.6454+-0.6760     0.225      1.157
+CMS_flavTag_JES_RelativeBal               0.0008+-0.9873     0.2109+-0.9856     0.213      0.998
+bFragWeight_2024                          0.0940+-0.6456     0.2283+-0.6358     0.208      0.985
+PS_fsr_G2QQ_muR_tt2c_2024                -0.1234+-0.9678     0.0730+-0.9878     0.203      1.021
+CMS_flavTag_Stat_flavL_C2_2024            0.3618+-0.4404     0.4510+-0.3144     0.203      0.714
+jes_RelativeSample_2024                  -0.0231+-1.0180     0.1785+-0.9363     0.198      0.920
+PS_isr_G2GG_muR_tt2c_2024                 0.2136+-0.9848     0.0201+-0.9918    -0.196      1.007
+CMS_flavTag_PU_2024                      -0.0196+-0.9949    -0.2112+-0.9925    -0.193      0.998
+CMS_flavTag_xsec_zjets_b                  0.0867+-0.9949     0.2677+-0.9807     0.182      0.986
+topHdampWeight_ttLF_2024                 -0.0748+-0.9275    -0.2276+-0.8916    -0.165      0.961
+CMS_flavTag_Stat_flavL_B1_2024            0.4207+-0.8714     0.2843+-0.8881    -0.157      1.019
+PS_fsr_G2QQ_cNS_tt2c_2024                 0.2535+-0.9691     0.1046+-0.9757    -0.154      1.007
+CMS_flavTag_xsec_zjets_c                 -0.0061+-0.9624     0.1406+-0.9355     0.152      0.972
+CMS_flavTag_JES_BBEC1_2024               -0.0425+-0.9971     0.1022+-1.0025     0.145      1.005
+PS_fsr_G2GG_cNS_ttLF_2024                 0.0433+-0.9896     0.1775+-0.9865     0.136      0.997
+LHE_muR_ttLF_2024                         0.0469+-0.9799    -0.0821+-0.9402    -0.132      0.960
+CMS_flavTag_MuTrigger                    -0.0430+-0.9981     0.0837+-1.0021     0.127      1.004
+PS_fsr_Q2QG_muR_ttcc_2024                 0.0997+-0.9920    -0.0260+-1.0017    -0.127      1.010
+PS_isr_G2GG_cNS_ttLF_2024                -0.0837+-0.9972     0.0406+-0.9923     0.125      0.995
+CMS_flavTag_MuIso                        -0.0381+-0.9983     0.0828+-1.0018     0.121      1.004
+CMS_flavTag_MuID                         -0.0391+-0.9983     0.0762+-1.0020     0.116      1.004
+CMS_flavTag_Stat_flavB_C0_2024            0.1558+-0.9842     0.2670+-0.9865     0.113      1.002
+
+wrote Comparison_250826_preUnblinding/compare/smoothed_CRo_legA.csv
