@@ -7,6 +7,8 @@ from colorama import Fore, Style
 import numpy as np
 import multiprocessing as mp
 from functools import partial
+import correctionlib
+import flavTagWeightPlugin
 
 ROOT.ROOT.EnableImplicitMT()
 ROOT.gROOT.SetBatch(True)
@@ -51,7 +53,7 @@ def add_overflow_underflow(hist):
     
     return hist
 
-def process_tree(infile, outfile, tree_name, hist_configs, year, selections, eventClassification, use5FS, count_events, do_systematics=False):
+def process_tree(infile, outfile, tree_name, hist_configs, year, selections, eventClassification, use5FS, count_events, do_systematics=False, flavtag_sf_json=None, flavtag_sf_name=None):
     """
     Processes a TTree, converts it to multiple TH1Ds for specified branches, and saves them to a ROOT file.
 
@@ -65,6 +67,9 @@ def process_tree(infile, outfile, tree_name, hist_configs, year, selections, eve
     - eventClassification: Boolean indicating whether to apply event classification.
     - use5FS: Boolean indicating whether to use 5-flavor scheme MC for ttbb and ttbj processes.
     - count_events: Decide whether to count events for each selection (probably slows things down a bit).
+    - flavtag_sf_json: Optional path to an alternate flavTaggingSF*.json.gz file; if given,
+      flavTagWeight is recomputed on the fly from this file instead of the ntuple's branch.
+    - flavtag_sf_name: Optional correctionlib correction name inside flavtag_sf_json.
     """
     print("")
 
@@ -92,6 +97,19 @@ def process_tree(infile, outfile, tree_name, hist_configs, year, selections, eve
     if "singlee" in infile:
         base_filter += " && passTrigMu==0" # Remove from the electron channel the events that fired the muon trigger. Could choose to do vice versa as well.
     df = df.Filter(base_filter)
+
+    # Recompute the flavour-tagging weight (central value, plus every systematic variation
+    # referenced by produce_systematics when running with --systematics) on the fly from an
+    # alternate correctionlib SF file, instead of relying on the flavTagWeight* branches
+    # already stored in the ntuple. The flavour-tagging entries do not depend on the
+    # per-category suffix, so the needed variations are collected from the suffix-less dict.
+    flavtag_weight_branch = flavTagWeightPlugin.STORED_WEIGHT_NAME
+    if flavtag_sf_json and "data" not in infile.lower():
+        needed_systs = flavTagWeightPlugin.extract_systematics(
+            produce_systematics(year, '').values()) if do_systematics else None
+        df, flavtag_weight_branch = flavTagWeightPlugin.define_flavtag_weights(
+            df, year, json_path=flavtag_sf_json, correction_name=flavtag_sf_name,
+            systematics=needed_systs)
 
     if eventClassification:
         print(f"{Fore.YELLOW}Running in event classification mode. Will define a series of fractional scores.{Style.RESET_ALL}")
@@ -145,15 +163,13 @@ def process_tree(infile, outfile, tree_name, hist_configs, year, selections, eve
             continue
         if any(x in infile for x in tt_file_names) and "base" in selection_name:
             continue
-        if use5FS: # "ttbb", "ttbj" -> both powheg and dps samples; "ttcc", "ttcj", "ttLF" --> only powheg
-            if any(x in selection_name for x in tt4f_strings) and not ("powheg" in infile or "dps" in infile):
+        if any(x in selection_name for x in tt_strings) and not "powheg" in infile: 
+            continue
+        if use5FS: # only powheg
+            if any(x in selection_name for x in tt4f_strings) and not "powheg" in infile:
                 continue
-            if any(x in selection_name for x in tt_strings) and not "powheg" in infile: 
-                continue
-        else:
+        else: # dedicated 4fs samples for ttbb, ttbj, tt2b
             if any(x in selection_name for x in tt4f_strings) and not "bb" in infile:
-                continue
-            if any(x in selection_name for x in tt_strings) and not "powheg" in infile:
                 continue
 
         suffix = suffix_dict.get(selection_name, '')
@@ -161,13 +177,19 @@ def process_tree(infile, outfile, tree_name, hist_configs, year, selections, eve
         # Assign event weight based on data taking year and process type
         #weight = assign_event_weight(year, infile, suffix)
         systematics = produce_systematics(year, suffix)
+
+        # Point the flavour-tagging terms at the recomputed columns, if we are using an
+        # alternate SF file (no-op when flavtag_weight_branch is the stored branch name).
+        systematics = {name: flavTagWeightPlugin.remap_expression(expr, flavtag_weight_branch)
+                       for name, expr in systematics.items()}
+
         for syst in systematics.keys():
             if not do_systematics and not syst == "None":
                 continue
             if syst == "None":
-                weight = assign_event_weight(year, infile, suffix)
+                weight = assign_event_weight(year, infile, suffix, flavtag_weight_branch=flavtag_weight_branch)
             else:
-                weight = assign_event_weight(year, infile, suffix, systematics[syst])
+                weight = assign_event_weight(year, infile, suffix, systematics[syst], flavtag_weight_branch=flavtag_weight_branch)
 
             #if not "data" in infile and not "Data" in infile:
             #    weight = weight + flavTag_renormalization[selection_name] #FIXME
@@ -261,7 +283,7 @@ def process_tree(infile, outfile, tree_name, hist_configs, year, selections, eve
     return (local_total_MC_events, local_events_in_category)
 
 
-def process_trees_parallel(input_files, output_files, tree_name, hist_configs, year, selections, eventClassification, use5FS, count_events, do_systematics):
+def process_trees_parallel(input_files, output_files, tree_name, hist_configs, year, selections, eventClassification, use5FS, count_events, do_systematics, flavtag_sf_json=None, flavtag_sf_name=None):
     """
     Basically a wrapper of process_tree to process multiple TTrees in parallel.
     """
@@ -275,7 +297,9 @@ def process_trees_parallel(input_files, output_files, tree_name, hist_configs, y
         eventClassification=eventClassification,
         use5FS=use5FS,
         count_events=count_events,
-        do_systematics=do_systematics
+        do_systematics=do_systematics,
+        flavtag_sf_json=flavtag_sf_json,
+        flavtag_sf_name=flavtag_sf_name
     )
 
     with mp.Pool(processes=min(len(input_files), mp.cpu_count())) as pool:
@@ -310,22 +334,24 @@ def read_csv(csv_file):
 
     return dict_list
 
-def assign_event_weight(year, infile, suffix, syst=""):
+def assign_event_weight(year, infile, suffix, syst="", flavtag_weight_branch="flavTagWeight"):
     """
     Define the MC event weight according to the year. Collision data should be handled separately.
 
     Parameters:
     - year: Data taking year.
     - infile: Input file.
+    - flavtag_weight_branch: Name of the branch/column to use for the flavour-tagging
+      weight term (defaults to the "flavTagWeight" branch stored in the ntuple; pass
+      the column added by flavTagWeightPlugin.define_flavtag_weight to use a weight
+      recomputed on the fly from an alternate correctionlib SF file instead).
     """
     weight = "1"
     if year == 2024 or year == 2025:
-        weight = "lumiwgt*genWeight*xsecWeight*puWeight*muEffWeight*elEffWeight*flavTagWeight*(((abs(lep1_pdgId)==11 && passTrigEl) || (abs(lep1_pdgId)==13 && passTrigMu)) && passmetfilters)"
-    if "ttbar" in infile or "tt-vcb" in infile:
+        weight = f"lumiwgt*genWeight*xsecWeight*puWeight*muEffWeight*elEffWeight*{flavtag_weight_branch}*(((abs(lep1_pdgId)==11 && passTrigEl) || (abs(lep1_pdgId)==13 && passTrigMu)) && passmetfilters)"
+    if "ttbar" in infile or "4f" in infile or "tt-vcb" in infile:
         weight = f"{weight}*TopPtWeight[1]*TopPtWeightNorm{suffix}[1]*TOPMLWeight[5]*TOPMLWeightNorm{suffix}[5]" # New variables in custom samples 
-    if "4f" in infile:
-        weight = f"{weight}*TopPtWeight[1]*TopPtWeightNorm{suffix}[1]*TOPMLWeight[5]*TOPMLWeightNorm{suffix}[5]"#*0.7559" # 5FS / 4FS for tt+B component
-    
+
     if not syst == "":
         weight = f"{weight}*{syst}"
     
@@ -365,236 +391,270 @@ def merge_files(directory, input_files, output_file):
 
 def produce_systematics(year, suffix):
 
-    systematics = {"None" : "", 
-               #Pileup and lepton efficiencies
-               "CMS_pileup_%sUp"   % year  : "puWeightUp/puWeight", 
-               "CMS_pileup_%sDown" % year  : "puWeightDown/puWeight",
-               "CMS_trigEffUp"   : "trigEffWeightUp/trigEffWeight",
-               "CMS_trigEffDown" : "trigEffWeightDown/trigEffWeight",
-               "CMS_muEffUp"     : "muEffWeight_UP/muEffWeight",
-               "CMS_muEffDown"   : "muEffWeight_DOWN/muEffWeight",
-               "CMS_elEffUp"     : "elEffWeight_UP/elEffWeight",
-               "CMS_elEffDown"   : "elEffWeight_DOWN/elEffWeight",
-               "CMS_elSmearUp"   : "elSmear_UP",
-               "CMS_elSmearDown" : "elSmear_DOWN",
-               "CMS_elScaleUp"   : "elScale_UP",
-               "CMS_elScaleDown" : "elScale_DOWN",
-               "CMS_muSmearUp"   : "muSmear_UP",
-               "CMS_muSmearDown" : "muSmear_DOWN",
-               "CMS_muScaleUp"   : "muScale_UP",
-               "CMS_muScaleDown" : "muScale_DOWN",
-               # Flavor tagging
-               "CMS_flavTag_xsec_ttbarUp"         : "flavTagWeight_XSec_ttbar_UP/flavTagWeight",
-               "CMS_flavTag_xsec_ttbarDown"       : "flavTagWeight_XSec_ttbar_DOWN/flavTagWeight",
-               "CMS_flavTag_xsec_wjets_cUp"       : "flavTagWeight_XSec_WJets_c_UP/flavTagWeight",
-               "CMS_flavTag_xsec_wjets_cDown"     : "flavTagWeight_XSec_WJets_c_DOWN/flavTagWeight",
-               "CMS_flavTag_xsec_wjets_bUp"       : "flavTagWeight_XSec_WJets_b_UP/flavTagWeight",
-               "CMS_flavTag_xsec_wjets_bDown"     : "flavTagWeight_XSec_WJets_b_DOWN/flavTagWeight",
-               "CMS_flavTag_xsec_zjets_cUp"       : "flavTagWeight_XSec_ZJets_c_UP/flavTagWeight",
-               "CMS_flavTag_xsec_zjets_cDown"     : "flavTagWeight_XSec_ZJets_c_DOWN/flavTagWeight",
-               "CMS_flavTag_xsec_zjets_bUp"       : "flavTagWeight_XSec_ZJets_b_UP/flavTagWeight",
-               "CMS_flavTag_xsec_zjets_bDown"     : "flavTagWeight_XSec_ZJets_b_DOWN/flavTagWeight",
-               "CMS_flavTag_xsec_singlet_tChUp"   : "flavTagWeight_XSec_singlet_tCh_UP/flavTagWeight",
-               "CMS_flavTag_xsec_singlet_tChDown" : "flavTagWeight_XSec_singlet_tCh_DOWN/flavTagWeight",
-               "CMS_flavTag_xsec_singlet_tWUp"    : "flavTagWeight_XSec_singlet_tW_UP/flavTagWeight",
-               "CMS_flavTag_xsec_singlet_tWDown"  : "flavTagWeight_XSec_singlet_tW_DOWN/flavTagWeight",
-               "CMS_flavTag_xsec_VVUp"            : "flavTagWeight_XSec_VV_UP/flavTagWeight",
-               "CMS_flavTag_xsec_VVDown"          : "flavTagWeight_XSec_VV_DOWN/flavTagWeight",
-               "CMS_flavTag_PU_%sUp"     % year   : "flavTagWeight_PUWeight_UP/flavTagWeight",
-               "CMS_flavTag_PU_%sDown"   % year   : "flavTagWeight_PUWeight_DOWN/flavTagWeight",
-               "CMS_flavTag_Lumi_%sUp"   % year   : "flavTagWeight_Lumi_13p6TeV_%s_UP/flavTagWeight" % year,
-               "CMS_flavTag_Lumi_%sDown" % year   : "flavTagWeight_Lumi_13p6TeV_%s_DOWN/flavTagWeight" % year,
-               "CMS_flavTag_EleRecoUp"            : "flavTagWeight_Ele_Reco_UP/flavTagWeight",
-               "CMS_flavTag_EleRecoDown"          : "flavTagWeight_Ele_Reco_DOWN/flavTagWeight",
-               "CMS_flavTag_EleScaleUp"           : "flavTagWeight_Ele_Scale_UP/flavTagWeight",
-               "CMS_flavTag_EleScaleDown"         : "flavTagWeight_Ele_Scale_DOWN/flavTagWeight",
-               "CMS_flavTag_EleSmearUp"           : "flavTagWeight_Ele_Smear_UP/flavTagWeight",
-               "CMS_flavTag_EleSmearDown"         : "flavTagWeight_Ele_Smear_DOWN/flavTagWeight",
-               "CMS_flavTag_ElePromptMVAUp"       : "flavTagWeight_Ele_PromptMVA_UP/flavTagWeight",
-               "CMS_flavTag_ElePromptMVADown"     : "flavTagWeight_Ele_PromptMVA_DOWN/flavTagWeight",
-               "CMS_flavTag_EleTriggerUp"         : "flavTagWeight_Ele_Trigger_UP/flavTagWeight",
-               "CMS_flavTag_EleTriggerDown"       : "flavTagWeight_Ele_Trigger_DOWN/flavTagWeight",
-               "CMS_flavTag_MuPromptMVAUp"        : "flavTagWeight_Mu_PromptMVA_UP/flavTagWeight",
-               "CMS_flavTag_MuPromptMVADown"      : "flavTagWeight_Mu_PromptMVA_DOWN/flavTagWeight",
-               "CMS_flavTag_MuScaleUp"            : "flavTagWeight_Mu_Scale_UP/flavTagWeight",
-               "CMS_flavTag_MuScaleDown"          : "flavTagWeight_Mu_Scale_DOWN/flavTagWeight",
-               "CMS_flavTag_MuResolUp"            : "flavTagWeight_Mu_Resol_UP/flavTagWeight",
-               "CMS_flavTag_MuResolDown"          : "flavTagWeight_Mu_Resol_DOWN/flavTagWeight",
-               "CMS_flavTag_MuTriggerUp"          : "flavTagWeight_Mu_Trigger_UP/flavTagWeight",
-               "CMS_flavTag_MuTriggerDown"        : "flavTagWeight_Mu_Trigger_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_C0_%sUp"   % year : "flavTagWeight_Stat_flavB_C0_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_C0_%sDown" % year : "flavTagWeight_Stat_flavB_C0_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_C1_%sUp"   % year : "flavTagWeight_Stat_flavB_C1_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_C1_%sDown" % year : "flavTagWeight_Stat_flavB_C1_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_C2_%sUp"   % year : "flavTagWeight_Stat_flavB_C2_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_C2_%sDown" % year : "flavTagWeight_Stat_flavB_C2_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_C3_%sUp"   % year : "flavTagWeight_Stat_flavB_C3_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_C3_%sDown" % year : "flavTagWeight_Stat_flavB_C3_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_C4_%sUp"   % year : "flavTagWeight_Stat_flavB_C4_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_C4_%sDown" % year : "flavTagWeight_Stat_flavB_C4_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_B0_%sUp"   % year : "flavTagWeight_Stat_flavB_B0_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_B0_%sDown" % year : "flavTagWeight_Stat_flavB_B0_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_B1_%sUp"   % year : "flavTagWeight_Stat_flavB_B1_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_B1_%sDown" % year : "flavTagWeight_Stat_flavB_B1_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_B2_%sUp"   % year : "flavTagWeight_Stat_flavB_B2_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_B2_%sDown" % year : "flavTagWeight_Stat_flavB_B2_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_B3_%sUp"   % year : "flavTagWeight_Stat_flavB_B3_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_B3_%sDown" % year : "flavTagWeight_Stat_flavB_B3_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_B4_%sUp"   % year : "flavTagWeight_Stat_flavB_B4_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavB_B4_%sDown" % year : "flavTagWeight_Stat_flavB_B4_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_C0_%sUp"   % year : "flavTagWeight_Stat_flavC_C0_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_C0_%sDown" % year : "flavTagWeight_Stat_flavC_C0_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_C1_%sUp"   % year : "flavTagWeight_Stat_flavC_C1_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_C1_%sDown" % year : "flavTagWeight_Stat_flavC_C1_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_C2_%sUp"   % year : "flavTagWeight_Stat_flavC_C2_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_C2_%sDown" % year : "flavTagWeight_Stat_flavC_C2_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_C3_%sUp"   % year : "flavTagWeight_Stat_flavC_C3_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_C3_%sDown" % year : "flavTagWeight_Stat_flavC_C3_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_C4_%sUp"   % year : "flavTagWeight_Stat_flavC_C4_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_C4_%sDown" % year : "flavTagWeight_Stat_flavC_C4_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_B0_%sUp"   % year : "flavTagWeight_Stat_flavC_B0_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_B0_%sDown" % year : "flavTagWeight_Stat_flavC_B0_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_B1_%sUp"   % year : "flavTagWeight_Stat_flavC_B1_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_B1_%sDown" % year : "flavTagWeight_Stat_flavC_B1_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_B2_%sUp"   % year : "flavTagWeight_Stat_flavC_B2_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_B2_%sDown" % year : "flavTagWeight_Stat_flavC_B2_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_B3_%sUp"   % year : "flavTagWeight_Stat_flavC_B3_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_B3_%sDown" % year : "flavTagWeight_Stat_flavC_B3_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_B4_%sUp"   % year : "flavTagWeight_Stat_flavC_B4_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavC_B4_%sDown" % year : "flavTagWeight_Stat_flavC_B4_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_C0_%sUp"   % year : "flavTagWeight_Stat_flavL_C0_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_C0_%sDown" % year : "flavTagWeight_Stat_flavL_C0_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_C1_%sUp"   % year : "flavTagWeight_Stat_flavL_C1_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_C1_%sDown" % year : "flavTagWeight_Stat_flavL_C1_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_C2_%sUp"   % year : "flavTagWeight_Stat_flavL_C2_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_C2_%sDown" % year : "flavTagWeight_Stat_flavL_C2_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_C3_%sUp"   % year : "flavTagWeight_Stat_flavL_C3_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_C3_%sDown" % year : "flavTagWeight_Stat_flavL_C3_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_C4_%sUp"   % year : "flavTagWeight_Stat_flavL_C4_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_C4_%sDown" % year : "flavTagWeight_Stat_flavL_C4_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_B0_%sUp"   % year : "flavTagWeight_Stat_flavL_B0_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_B0_%sDown" % year : "flavTagWeight_Stat_flavL_B0_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_B1_%sUp"   % year : "flavTagWeight_Stat_flavL_B1_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_B1_%sDown" % year : "flavTagWeight_Stat_flavL_B1_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_B2_%sUp"   % year : "flavTagWeight_Stat_flavL_B2_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_B2_%sDown" % year : "flavTagWeight_Stat_flavL_B2_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_B3_%sUp"   % year : "flavTagWeight_Stat_flavL_B3_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_B3_%sDown" % year : "flavTagWeight_Stat_flavL_B3_DOWN/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_B4_%sUp"   % year : "flavTagWeight_Stat_flavL_B4_UP/flavTagWeight",
-               "CMS_flavTag_Stat_flavL_B4_%sDown" % year : "flavTagWeight_Stat_flavL_B4_DOWN/flavTagWeight",
-               "CMS_flavTag_LHE_muF_ttbarUp"     : "flavTagWeight_LHEScaleWeight_muF_ttbar_UP/flavTagWeight",
-               "CMS_flavTag_LHE_muF_ttbarDown"   : "flavTagWeight_LHEScaleWeight_muF_ttbar_DOWN/flavTagWeight",
-               "CMS_flavTag_LHE_muR_ttbarUp"     : "flavTagWeight_LHEScaleWeight_muR_ttbar_UP/flavTagWeight",
-               "CMS_flavTag_LHE_muR_ttbarDown"   : "flavTagWeight_LHEScaleWeight_muR_ttbar_DOWN/flavTagWeight",
-               "CMS_flavTag_LHE_muF_singletUp"   : "flavTagWeight_LHEScaleWeight_muF_singlet_UP/flavTagWeight",
-               "CMS_flavTag_LHE_muF_singletDown" : "flavTagWeight_LHEScaleWeight_muF_singlet_DOWN/flavTagWeight",
-               "CMS_flavTag_LHE_muR_singletUp"   : "flavTagWeight_LHEScaleWeight_muR_singlet_UP/flavTagWeight",
-               "CMS_flavTag_LHE_muR_singletDown" : "flavTagWeight_LHEScaleWeight_muR_singlet_DOWN/flavTagWeight",
-               "CMS_flavTag_LHE_muF_wjetsUp"     : "flavTagWeight_LHEScaleWeight_muF_wjets_UP/flavTagWeight",
-               "CMS_flavTag_LHE_muF_wjetsDown"   : "flavTagWeight_LHEScaleWeight_muF_wjets_DOWN/flavTagWeight",
-               "CMS_flavTag_LHE_muR_wjetsUp"     : "flavTagWeight_LHEScaleWeight_muR_wjets_UP/flavTagWeight",
-               "CMS_flavTag_LHE_muR_wjetsDown"   : "flavTagWeight_LHEScaleWeight_muR_wjets_DOWN/flavTagWeight",
-               "CMS_flavTag_LHE_muF_zjetsUp"     : "flavTagWeight_LHEScaleWeight_muF_zjets_UP/flavTagWeight",
-               "CMS_flavTag_LHE_muF_zjetsDown"   : "flavTagWeight_LHEScaleWeight_muF_zjets_DOWN/flavTagWeight",
-               "CMS_flavTag_LHE_muR_zjetsUp"     : "flavTagWeight_LHEScaleWeight_muR_zjets_UP/flavTagWeight",
-               "CMS_flavTag_LHE_muR_zjetsDown"   : "flavTagWeight_LHEScaleWeight_muR_zjets_DOWN/flavTagWeight",
-               "CMS_flavTag_LHE_muF_dibosonUp"   : "flavTagWeight_LHEScaleWeight_muF_diboson_UP/flavTagWeight",
-               "CMS_flavTag_LHE_muF_dibosonDown" : "flavTagWeight_LHEScaleWeight_muF_diboson_DOWN/flavTagWeight",
-               "CMS_flavTag_LHE_muR_dibosonUp"   : "flavTagWeight_LHEScaleWeight_muR_diboson_UP/flavTagWeight",
-               "CMS_flavTag_LHE_muR_dibosonDown" : "flavTagWeight_LHEScaleWeight_muR_diboson_DOWN/flavTagWeight",
-               "CMS_flavTag_PS_ISR_ttbarUp"      : "flavTagWeight_PSWeightISR_ttbar_UP/flavTagWeight",
-               "CMS_flavTag_PS_ISR_ttbarDown"    : "flavTagWeight_PSWeightISR_ttbar_DOWN/flavTagWeight",
-               "CMS_flavTag_PS_FSR_ttbarUp"      : "flavTagWeight_PSWeightFSR_ttbar_UP/flavTagWeight",
-               "CMS_flavTag_PS_FSR_ttbarDown"    : "flavTagWeight_PSWeightFSR_ttbar_DOWN/flavTagWeight",
-               "CMS_flavTag_PS_ISR_singletUp"    : "flavTagWeight_PSWeightISR_singlet_UP/flavTagWeight",
-               "CMS_flavTag_PS_ISR_singletDown"  : "flavTagWeight_PSWeightISR_singlet_DOWN/flavTagWeight",
-               "CMS_flavTag_PS_FSR_singletUp"    : "flavTagWeight_PSWeightFSR_singlet_UP/flavTagWeight",
-               "CMS_flavTag_PS_FSR_singletDown"  : "flavTagWeight_PSWeightFSR_singlet_DOWN/flavTagWeight",
-               "CMS_flavTag_PS_ISR_wjetsUp"      : "flavTagWeight_PSWeightISR_wjets_UP/flavTagWeight",
-               "CMS_flavTag_PS_ISR_wjetsDown"    : "flavTagWeight_PSWeightISR_wjets_DOWN/flavTagWeight",
-               "CMS_flavTag_PS_FSR_wjetsUp"      : "flavTagWeight_PSWeightFSR_wjets_UP/flavTagWeight",
-               "CMS_flavTag_PS_FSR_wjetsDown"    : "flavTagWeight_PSWeightFSR_wjets_DOWN/flavTagWeight",
-               "CMS_flavTag_PS_ISR_zjetsUp"      : "flavTagWeight_PSWeightISR_zjets_UP/flavTagWeight",
-               "CMS_flavTag_PS_ISR_zjetsDown"    : "flavTagWeight_PSWeightISR_zjets_DOWN/flavTagWeight",
-               "CMS_flavTag_PS_FSR_zjetsUp"      : "flavTagWeight_PSWeightFSR_zjets_UP/flavTagWeight",
-               "CMS_flavTag_PS_FSR_zjetsDown"    : "flavTagWeight_PSWeightFSR_zjets_DOWN/flavTagWeight",
-               "CMS_flavTag_PS_ISR_dibosonUp"    : "flavTagWeight_PSWeightISR_diboson_UP/flavTagWeight",
-               "CMS_flavTag_PS_ISR_dibosonDown"  : "flavTagWeight_PSWeightISR_diboson_DOWN/flavTagWeight",
-               "CMS_flavTag_PS_FSR_dibosonUp"    : "flavTagWeight_PSWeightFSR_diboson_UP/flavTagWeight",
-               "CMS_flavTag_PS_FSR_dibosonDown"  : "flavTagWeight_PSWeightFSR_diboson_DOWN/flavTagWeight",
-               "CMS_flavTag_JES_AbsoluteUp"      : "flavTagWeight_JESRegrouped_Absolute_UP/flavTagWeight",
-               "CMS_flavTag_JES_AbsoluteDown"    : "flavTagWeight_JESRegrouped_Absolute_DOWN/flavTagWeight",
-               "CMS_flavTag_JES_BBEC1Up"         : "flavTagWeight_JESRegrouped_BBEC1_UP/flavTagWeight",
-               "CMS_flavTag_JES_BBEC1Down"       : "flavTagWeight_JESRegrouped_BBEC1_DOWN/flavTagWeight",
-               "CMS_flavTag_JES_FlavorQCDUp"     : "flavTagWeight_JESRegrouped_FlavorQCD_UP/flavTagWeight",
-               "CMS_flavTag_JES_FlavorQCDDown"   : "flavTagWeight_JESRegrouped_FlavorQCD_DOWN/flavTagWeight",
-               "CMS_flavTag_JES_RelativeBalUp"   : "flavTagWeight_JESRegrouped_RelativeBal_UP/flavTagWeight",
-               "CMS_flavTag_JES_RelativeBalDown" : "flavTagWeight_JESRegrouped_RelativeBal_DOWN/flavTagWeight",
-               "CMS_flavTag_JES_Absolute_%sUp"   % year : "flavTagWeight_JESRegrouped_Absolute_%s_UP/flavTagWeight" % year,
-               "CMS_flavTag_JES_Absolute_%sDown" % year : "flavTagWeight_JESRegrouped_Absolute_%s_DOWN/flavTagWeight" % year,
-               "CMS_flavTag_JES_BBEC1_%sUp"      % year : "flavTagWeight_JESRegrouped_BBEC1_%s_UP/flavTagWeight" % year,
-               "CMS_flavTag_JES_BBEC1_%sDown"    % year : "flavTagWeight_JESRegrouped_BBEC1_%s_DOWN/flavTagWeight" % year,
-               "CMS_flavTag_JES_RelativeSample_%sUp"   % year : "flavTagWeight_JESRegrouped_RelativeSample_%s_UP/flavTagWeight" % year,
-               "CMS_flavTag_JES_RelativeSample_%sDown" % year : "flavTagWeight_JESRegrouped_RelativeSample_%s_DOWN/flavTagWeight" % year,
-               "CMS_flavTag_JER_%sUp"   % year : "flavTagWeight_JER_UP/flavTagWeight",
-               "CMS_flavTag_JER_%sDown" % year : "flavTagWeight_JER_DOWN/flavTagWeight",
-               # Hdamp, b fragmentation, LHE scale, PS weights
-               "topHdampWeight_%sUp"   % year : f"TOPMLWeight[1]*TOPMLWeightNorm{suffix}[1]",
-               "topHdampWeight_%sDown" % year : f"TOPMLWeight[3]*TOPMLWeightNorm{suffix}[3]",
-               "bFragWeight_%sUp"   % year : f"(TOPMLWeight[4]*TOPMLWeightNorm{suffix}[4])/(TOPMLWeight[5]*TOPMLWeightNorm{suffix}[5])", #Divide by bFrag nominal and multiply by bFrag up
-               "bFragWeight_%sDown" % year : f"1/(TOPMLWeight[5]*TOPMLWeightNorm{suffix}[5])", #The standard samples are effectively bFrag down, so here just dividing by bFrag nominal and its renorm weight
-               "bFragPetersonWeight_%sUp"   % year : f"(bFragAndDecayWeight[3]*BFragAndDecayWeightNorm{suffix}[3])/(TOPMLWeight[5]*TOPMLWeightNorm{suffix}[5])", #A one-sided systematic
-               "bFragPetersonWeight_%sDown" % year : f"1.", #Effectively a one-sided systematic
-               # LHE for minor bkgs
-               #"LHE_minorBkg_muF_%sUp" % year : "LHEScaleWeight[5]*LHEScaleWeightNorm[5]",
-               #"LHE_minorBkg_muF_%sDown" % year : "LHEScaleWeight[3]*LHEScaleWeightNorm[3]",
-               #"LHE_minorBkg_muR_%sUp" % year : "LHEScaleWeight[7]*LHEScaleWeightNorm[7]",
-               #"LHE_minorBkg_muR_%sDown" % year : "LHEScaleWeight[1]*LHEScaleWeightNorm[1]",
-               # LHE for large bkgs
-               "LHE_muF_%sUp"   % year : f"LHEScaleWeight[5]*LHEScaleWeightNorm{suffix}[5]",
-               "LHE_muF_%sDown" % year : f"LHEScaleWeight[3]*LHEScaleWeightNorm{suffix}[3]",
-               "LHE_muR_%sUp"   % year : f"LHEScaleWeight[7]*LHEScaleWeightNorm{suffix}[7]",
-               "LHE_muR_%sDown" % year : f"LHEScaleWeight[1]*LHEScaleWeightNorm{suffix}[1]",
-               # PS for minor bkgs
-               "minorBkg_PS_ISR_%sUp"   % year : f"PSWeight[0]*PSWeightNorm{suffix}[0]",
-               "minorBkg_PS_ISR_%sDown" % year : f"PSWeight[2]*PSWeightNorm{suffix}[2]",
-               "minorBkg_PS_FSR_%sUp"   % year : f"PSWeight[1]*PSWeightNorm{suffix}[1]",
-               "minorBkg_PS_FSR_%sDown" % year : f"PSWeight[3]*PSWeightNorm{suffix}[3]",
-               # PS-fsr for large bkgs
-               "PS_fsr_G2GG_muR_%sDown" %year : f"PSWeight[6]*PSWeightNorm{suffix}[6]",
-               "PS_fsr_G2GG_muR_%sUp"   %year : f"PSWeight[7]*PSWeightNorm{suffix}[7]",
-               "PS_fsr_G2QQ_muR_%sDown" %year : f"PSWeight[8]*PSWeightNorm{suffix}[8]",
-               "PS_fsr_G2QQ_muR_%sUp"   %year : f"PSWeight[9]*PSWeightNorm{suffix}[9]",                              
-               "PS_fsr_Q2QG_muR_%sDown" %year : f"PSWeight[10]*PSWeightNorm{suffix}[10]",
-               "PS_fsr_Q2QG_muR_%sUp"   %year : f"PSWeight[11]*PSWeightNorm{suffix}[11]",                              
-               "PS_fsr_X2XG_muR_%sDown" %year : f"PSWeight[12]*PSWeightNorm{suffix}[12]",
-               "PS_fsr_X2XG_muR_%sUp"   %year : f"PSWeight[13]*PSWeightNorm{suffix}[13]",
-               "PS_fsr_G2GG_cNS_%sDown" %year : f"PSWeight[14]*PSWeightNorm{suffix}[14]",
-               "PS_fsr_G2GG_cNS_%sUp"   %year : f"PSWeight[15]*PSWeightNorm{suffix}[15]",
-               "PS_fsr_G2QQ_cNS_%sDown" %year : f"PSWeight[16]*PSWeightNorm{suffix}[16]",
-               "PS_fsr_G2QQ_cNS_%sUp"   %year : f"PSWeight[17]*PSWeightNorm{suffix}[17]",
-               "PS_fsr_G2QG_cNS_%sDown" %year : f"PSWeight[18]*PSWeightNorm{suffix}[18]",
-               "PS_fsr_G2QG_cNS_%sUp"   %year : f"PSWeight[19]*PSWeightNorm{suffix}[19]",
-               "PS_fsr_X2XG_cNS_%sDown" %year : f"PSWeight[20]*PSWeightNorm{suffix}[20]",
-               "PS_fsr_X2XG_cNS_%sUp"   %year : f"PSWeight[21]*PSWeightNorm{suffix}[21]",
-               # PS-isr for large bkgs
-               "PS_isr_G2GG_muR_%sDown" %year : f"PSWeight[28]*PSWeightNorm{suffix}[28]",
-               "PS_isr_G2GG_muR_%sUp"   %year : f"PSWeight[29]*PSWeightNorm{suffix}[29]",
-               "PS_isr_G2QQ_muR_%sDown" %year : f"PSWeight[30]*PSWeightNorm{suffix}[30]",
-               "PS_isr_G2QQ_muR_%sUp"   %year : f"PSWeight[31]*PSWeightNorm{suffix}[31]",
-               "PS_isr_Q2QG_muR_%sDown" %year : f"PSWeight[32]*PSWeightNorm{suffix}[32]",
-               "PS_isr_Q2QG_muR_%sUp"   %year : f"PSWeight[33]*PSWeightNorm{suffix}[33]",
-               "PS_isr_X2XG_muR_%sDown" %year : f"PSWeight[34]*PSWeightNorm{suffix}[34]",
-               "PS_isr_X2XG_muR_%sUp"   %year : f"PSWeight[35]*PSWeightNorm{suffix}[35]",
-               "PS_isr_G2GG_cNS_%sDown" %year : f"PSWeight[36]*PSWeightNorm{suffix}[36]",
-               "PS_isr_G2GG_cNS_%sUp"   %year : f"PSWeight[37]*PSWeightNorm{suffix}[37]",
-               "PS_isr_G2QQ_cNS_%sDown" %year : f"PSWeight[38]*PSWeightNorm{suffix}[38]",
-               "PS_isr_G2QQ_cNS_%sUp"   %year : f"PSWeight[39]*PSWeightNorm{suffix}[39]",
-               "PS_isr_G2QG_cNS_%sDown" %year : f"PSWeight[40]*PSWeightNorm{suffix}[40]",
-               "PS_isr_G2QG_cNS_%sUp"   %year : f"PSWeight[41]*PSWeightNorm{suffix}[41]",
-               "PS_isr_X2XG_cNS_%sDown" %year : f"PSWeight[42]*PSWeightNorm{suffix}[42]",
-               "PS_isr_X2XG_cNS_%sUp"   %year : f"PSWeight[43]*PSWeightNorm{suffix}[43]",
-           }
+       systematics = {"None" : "", 
+                   #Pileup and lepton efficiencies
+                   "CMS_pileup_%sUp"   % year  : "puWeightUp/puWeight", 
+                   "CMS_pileup_%sDown" % year  : "puWeightDown/puWeight",
+                   "CMS_trigEffUp"   : "trigEffWeightUp/trigEffWeight",
+                   "CMS_trigEffDown" : "trigEffWeightDown/trigEffWeight",
+                   "CMS_muEffUp"     : "muEffWeight_UP/muEffWeight",
+                   "CMS_muEffDown"   : "muEffWeight_DOWN/muEffWeight",
+                   "CMS_elEffUp"     : "elEffWeight_UP/elEffWeight",
+                   "CMS_elEffDown"   : "elEffWeight_DOWN/elEffWeight",
+                   "CMS_elSmearUp"   : "elSmear_UP",
+                   "CMS_elSmearDown" : "elSmear_DOWN",
+                   "CMS_elScaleUp"   : "elScale_UP",
+                   "CMS_elScaleDown" : "elScale_DOWN",
+                   "CMS_muSmearUp"   : "muSmear_UP",
+                   "CMS_muSmearDown" : "muSmear_DOWN",
+                   "CMS_muScaleUp"   : "muScale_UP",
+                   "CMS_muScaleDown" : "muScale_DOWN",
+                   # Flavor tagging
+                   "CMS_flavTag_TTWeight_ttbarUp"     : "flavTagWeight_TTWeight_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_TTWeight_ttbarDown"   : "flavTagWeight_TTWeight_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_HDamp_ttbarUp"        : "flavTagWeight_HDamp_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_HDamp_ttbarDown"      : "flavTagWeight_HDamp_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_BDecay_ttbarUp"       : "flavTagWeight_BDecay_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_BDecay_ttbarDown"     : "flavTagWeight_BDecay_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_CDecay_ttbarUp"       : "flavTagWeight_CDecay_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_CDecay_ttbarDown"     : "flavTagWeight_CDecay_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_xsec_ttbarUp"         : "flavTagWeight_XSec_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_xsec_ttbarDown"       : "flavTagWeight_XSec_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_xsec_wjets_cUp"       : "flavTagWeight_XSec_WJets_c_UP/flavTagWeight",
+                   "CMS_flavTag_xsec_wjets_cDown"     : "flavTagWeight_XSec_WJets_c_DOWN/flavTagWeight",
+                   "CMS_flavTag_xsec_wjets_bUp"       : "flavTagWeight_XSec_WJets_b_UP/flavTagWeight",
+                   "CMS_flavTag_xsec_wjets_bDown"     : "flavTagWeight_XSec_WJets_b_DOWN/flavTagWeight",
+                   "CMS_flavTag_xsec_zjets_cUp"       : "flavTagWeight_XSec_ZJets_c_UP/flavTagWeight",
+                   "CMS_flavTag_xsec_zjets_cDown"     : "flavTagWeight_XSec_ZJets_c_DOWN/flavTagWeight",
+                   "CMS_flavTag_xsec_zjets_bUp"       : "flavTagWeight_XSec_ZJets_b_UP/flavTagWeight",
+                   "CMS_flavTag_xsec_zjets_bDown"     : "flavTagWeight_XSec_ZJets_b_DOWN/flavTagWeight",
+                   "CMS_flavTag_xsec_singlet_tChUp"   : "flavTagWeight_XSec_singlet_tCh_UP/flavTagWeight",
+                   "CMS_flavTag_xsec_singlet_tChDown" : "flavTagWeight_XSec_singlet_tCh_DOWN/flavTagWeight",
+                   "CMS_flavTag_xsec_singlet_tWUp"    : "flavTagWeight_XSec_singlet_tW_UP/flavTagWeight",
+                   "CMS_flavTag_xsec_singlet_tWDown"  : "flavTagWeight_XSec_singlet_tW_DOWN/flavTagWeight",
+                   "CMS_flavTag_xsec_VVUp"            : "flavTagWeight_XSec_VV_UP/flavTagWeight",
+                   "CMS_flavTag_xsec_VVDown"          : "flavTagWeight_XSec_VV_DOWN/flavTagWeight",
+                   "CMS_flavTag_PU_%sUp"     % year   : "flavTagWeight_PUWeight_UP/flavTagWeight",
+                   "CMS_flavTag_PU_%sDown"   % year   : "flavTagWeight_PUWeight_DOWN/flavTagWeight",
+                   "CMS_flavTag_Lumi_%sUp"   % year   : "flavTagWeight_Lumi_13p6TeV_%s_UP/flavTagWeight" % year,
+                   "CMS_flavTag_Lumi_%sDown" % year   : "flavTagWeight_Lumi_13p6TeV_%s_DOWN/flavTagWeight" % year,
+                   "CMS_flavTag_EleRecoUp"            : "flavTagWeight_Ele_Reco_UP/flavTagWeight",
+                   "CMS_flavTag_EleRecoDown"          : "flavTagWeight_Ele_Reco_DOWN/flavTagWeight",
+                   "CMS_flavTag_EleScaleUp"           : "flavTagWeight_Ele_Scale_UP/flavTagWeight",
+                   "CMS_flavTag_EleScaleDown"         : "flavTagWeight_Ele_Scale_DOWN/flavTagWeight",
+                   "CMS_flavTag_EleSmearUp"           : "flavTagWeight_Ele_Smear_UP/flavTagWeight",
+                   "CMS_flavTag_EleSmearDown"         : "flavTagWeight_Ele_Smear_DOWN/flavTagWeight",
+                   "CMS_flavTag_EleIDUp"              : "flavTagWeight_Ele_ID_UP/flavTagWeight",
+                   "CMS_flavTag_EleIDDown"            : "flavTagWeight_Ele_ID_DOWN/flavTagWeight",
+                   "CMS_flavTag_EleTriggerUp"         : "flavTagWeight_Ele_Trigger_UP/flavTagWeight",
+                   "CMS_flavTag_EleTriggerDown"       : "flavTagWeight_Ele_Trigger_DOWN/flavTagWeight",
+                   "CMS_flavTag_MuIDUp"               : "flavTagWeight_Mu_ID_UP/flavTagWeight",
+                   "CMS_flavTag_MuIDDown"             : "flavTagWeight_Mu_ID_DOWN/flavTagWeight",
+                   "CMS_flavTag_MuIsoUp"              : "flavTagWeight_Mu_Iso_UP/flavTagWeight",
+                   "CMS_flavTag_MuIsoDown"            : "flavTagWeight_Mu_Iso_DOWN/flavTagWeight",
+                   "CMS_flavTag_MuScaleUp"            : "flavTagWeight_Mu_Scale_UP/flavTagWeight",
+                   "CMS_flavTag_MuScaleDown"          : "flavTagWeight_Mu_Scale_DOWN/flavTagWeight",
+                   "CMS_flavTag_MuResolUp"            : "flavTagWeight_Mu_Resol_UP/flavTagWeight",
+                   "CMS_flavTag_MuResolDown"          : "flavTagWeight_Mu_Resol_DOWN/flavTagWeight",
+                   "CMS_flavTag_MuTriggerUp"          : "flavTagWeight_Mu_Trigger_UP/flavTagWeight",
+                   "CMS_flavTag_MuTriggerDown"        : "flavTagWeight_Mu_Trigger_DOWN/flavTagWeight",
+                   "CMS_flavTag_MET_UnclEnergyUp"     : "flavTagWeight_MET_UnclEnergy_UP/flavTagWeight",
+                   "CMS_flavTag_MET_UnclEnergyDown"   : "flavTagWeight_MET_UnclEnergy_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_C0_%sUp"   % year : "flavTagWeight_Stat_flavB_C0_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_C0_%sDown" % year : "flavTagWeight_Stat_flavB_C0_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_C1_%sUp"   % year : "flavTagWeight_Stat_flavB_C1_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_C1_%sDown" % year : "flavTagWeight_Stat_flavB_C1_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_C2_%sUp"   % year : "flavTagWeight_Stat_flavB_C2_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_C2_%sDown" % year : "flavTagWeight_Stat_flavB_C2_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_C3_%sUp"   % year : "flavTagWeight_Stat_flavB_C3_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_C3_%sDown" % year : "flavTagWeight_Stat_flavB_C3_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_C4_%sUp"   % year : "flavTagWeight_Stat_flavB_C4_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_C4_%sDown" % year : "flavTagWeight_Stat_flavB_C4_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_B0_%sUp"   % year : "flavTagWeight_Stat_flavB_B0_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_B0_%sDown" % year : "flavTagWeight_Stat_flavB_B0_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_B1_%sUp"   % year : "flavTagWeight_Stat_flavB_B1_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_B1_%sDown" % year : "flavTagWeight_Stat_flavB_B1_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_B2_%sUp"   % year : "flavTagWeight_Stat_flavB_B2_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_B2_%sDown" % year : "flavTagWeight_Stat_flavB_B2_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_B3_%sUp"   % year : "flavTagWeight_Stat_flavB_B3_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_B3_%sDown" % year : "flavTagWeight_Stat_flavB_B3_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_B4_%sUp"   % year : "flavTagWeight_Stat_flavB_B4_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavB_B4_%sDown" % year : "flavTagWeight_Stat_flavB_B4_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_C0_%sUp"   % year : "flavTagWeight_Stat_flavC_C0_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_C0_%sDown" % year : "flavTagWeight_Stat_flavC_C0_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_C1_%sUp"   % year : "flavTagWeight_Stat_flavC_C1_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_C1_%sDown" % year : "flavTagWeight_Stat_flavC_C1_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_C2_%sUp"   % year : "flavTagWeight_Stat_flavC_C2_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_C2_%sDown" % year : "flavTagWeight_Stat_flavC_C2_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_C3_%sUp"   % year : "flavTagWeight_Stat_flavC_C3_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_C3_%sDown" % year : "flavTagWeight_Stat_flavC_C3_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_C4_%sUp"   % year : "flavTagWeight_Stat_flavC_C4_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_C4_%sDown" % year : "flavTagWeight_Stat_flavC_C4_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_B0_%sUp"   % year : "flavTagWeight_Stat_flavC_B0_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_B0_%sDown" % year : "flavTagWeight_Stat_flavC_B0_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_B1_%sUp"   % year : "flavTagWeight_Stat_flavC_B1_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_B1_%sDown" % year : "flavTagWeight_Stat_flavC_B1_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_B2_%sUp"   % year : "flavTagWeight_Stat_flavC_B2_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_B2_%sDown" % year : "flavTagWeight_Stat_flavC_B2_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_B3_%sUp"   % year : "flavTagWeight_Stat_flavC_B3_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_B3_%sDown" % year : "flavTagWeight_Stat_flavC_B3_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_B4_%sUp"   % year : "flavTagWeight_Stat_flavC_B4_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavC_B4_%sDown" % year : "flavTagWeight_Stat_flavC_B4_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_C0_%sUp"   % year : "flavTagWeight_Stat_flavL_C0_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_C0_%sDown" % year : "flavTagWeight_Stat_flavL_C0_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_C1_%sUp"   % year : "flavTagWeight_Stat_flavL_C1_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_C1_%sDown" % year : "flavTagWeight_Stat_flavL_C1_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_C2_%sUp"   % year : "flavTagWeight_Stat_flavL_C2_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_C2_%sDown" % year : "flavTagWeight_Stat_flavL_C2_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_C3_%sUp"   % year : "flavTagWeight_Stat_flavL_C3_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_C3_%sDown" % year : "flavTagWeight_Stat_flavL_C3_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_C4_%sUp"   % year : "flavTagWeight_Stat_flavL_C4_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_C4_%sDown" % year : "flavTagWeight_Stat_flavL_C4_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_B0_%sUp"   % year : "flavTagWeight_Stat_flavL_B0_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_B0_%sDown" % year : "flavTagWeight_Stat_flavL_B0_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_B1_%sUp"   % year : "flavTagWeight_Stat_flavL_B1_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_B1_%sDown" % year : "flavTagWeight_Stat_flavL_B1_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_B2_%sUp"   % year : "flavTagWeight_Stat_flavL_B2_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_B2_%sDown" % year : "flavTagWeight_Stat_flavL_B2_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_B3_%sUp"   % year : "flavTagWeight_Stat_flavL_B3_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_B3_%sDown" % year : "flavTagWeight_Stat_flavL_B3_DOWN/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_B4_%sUp"   % year : "flavTagWeight_Stat_flavL_B4_UP/flavTagWeight",
+                   "CMS_flavTag_Stat_flavL_B4_%sDown" % year : "flavTagWeight_Stat_flavL_B4_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_muF_ttbarUp"     : "flavTagWeight_LHEScaleWeight_muF_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_muF_ttbarDown"   : "flavTagWeight_LHEScaleWeight_muF_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_muR_ttbarUp"     : "flavTagWeight_LHEScaleWeight_muR_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_muR_ttbarDown"   : "flavTagWeight_LHEScaleWeight_muR_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_muF_singletUp"   : "flavTagWeight_LHEScaleWeight_muF_singlet_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_muF_singletDown" : "flavTagWeight_LHEScaleWeight_muF_singlet_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_muR_singletUp"   : "flavTagWeight_LHEScaleWeight_muR_singlet_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_muR_singletDown" : "flavTagWeight_LHEScaleWeight_muR_singlet_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_muF_wjetsUp"     : "flavTagWeight_LHEScaleWeight_muF_wjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_muF_wjetsDown"   : "flavTagWeight_LHEScaleWeight_muF_wjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_muR_wjetsUp"     : "flavTagWeight_LHEScaleWeight_muR_wjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_muR_wjetsDown"   : "flavTagWeight_LHEScaleWeight_muR_wjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_muF_zjetsUp"     : "flavTagWeight_LHEScaleWeight_muF_zjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_muF_zjetsDown"   : "flavTagWeight_LHEScaleWeight_muF_zjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_muR_zjetsUp"     : "flavTagWeight_LHEScaleWeight_muR_zjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_muR_zjetsDown"   : "flavTagWeight_LHEScaleWeight_muR_zjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_muF_dibosonUp"   : "flavTagWeight_LHEScaleWeight_muF_diboson_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_muF_dibosonDown" : "flavTagWeight_LHEScaleWeight_muF_diboson_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_muR_dibosonUp"   : "flavTagWeight_LHEScaleWeight_muR_diboson_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_muR_dibosonDown" : "flavTagWeight_LHEScaleWeight_muR_diboson_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_ttbarUp"     : "flavTagWeight_LHEScaleWeight_PDF_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_ttbarDown"   : "flavTagWeight_LHEScaleWeight_PDF_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_singletUp"   : "flavTagWeight_LHEScaleWeight_PDF_singlet_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_singletDown" : "flavTagWeight_LHEScaleWeight_PDF_singlet_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_wjetsUp"     : "flavTagWeight_LHEScaleWeight_PDF_wjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_wjetsDown"   : "flavTagWeight_LHEScaleWeight_PDF_wjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_zjetsUp"     : "flavTagWeight_LHEScaleWeight_PDF_zjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_zjetsDown"   : "flavTagWeight_LHEScaleWeight_PDF_zjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_dibosonUp"   : "flavTagWeight_LHEScaleWeight_PDF_diboson_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_dibosonDown" : "flavTagWeight_LHEScaleWeight_PDF_diboson_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_ttbarUp"      : "flavTagWeight_LHEScaleWeight_aS_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_ttbarDown"    : "flavTagWeight_LHEScaleWeight_aS_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_singletUp"    : "flavTagWeight_LHEScaleWeight_aS_singlet_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_singletDown"  : "flavTagWeight_LHEScaleWeight_aS_singlet_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_wjetsUp"      : "flavTagWeight_LHEScaleWeight_aS_wjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_wjetsDown"    : "flavTagWeight_LHEScaleWeight_aS_wjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_zjetsUp"      : "flavTagWeight_LHEScaleWeight_aS_zjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_zjetsDown"    : "flavTagWeight_LHEScaleWeight_aS_zjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_dibosonUp"    : "flavTagWeight_LHEScaleWeight_aS_diboson_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_dibosonDown"  : "flavTagWeight_LHEScaleWeight_aS_diboson_DOWN/flavTagWeight",
+                   "CMS_flavTag_PS_ISR_ttbarUp"      : "flavTagWeight_PSWeightISR_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_PS_ISR_ttbarDown"    : "flavTagWeight_PSWeightISR_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_PS_FSR_ttbarUp"      : "flavTagWeight_PSWeightFSR_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_PS_FSR_ttbarDown"    : "flavTagWeight_PSWeightFSR_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_PS_ISR_singletUp"    : "flavTagWeight_PSWeightISR_singlet_UP/flavTagWeight",
+                   "CMS_flavTag_PS_ISR_singletDown"  : "flavTagWeight_PSWeightISR_singlet_DOWN/flavTagWeight",
+                   "CMS_flavTag_PS_FSR_singletUp"    : "flavTagWeight_PSWeightFSR_singlet_UP/flavTagWeight",
+                   "CMS_flavTag_PS_FSR_singletDown"  : "flavTagWeight_PSWeightFSR_singlet_DOWN/flavTagWeight",
+                   "CMS_flavTag_PS_ISR_wjetsUp"      : "flavTagWeight_PSWeightISR_wjets_UP/flavTagWeight",
+                   "CMS_flavTag_PS_ISR_wjetsDown"    : "flavTagWeight_PSWeightISR_wjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_PS_FSR_wjetsUp"      : "flavTagWeight_PSWeightFSR_wjets_UP/flavTagWeight",
+                   "CMS_flavTag_PS_FSR_wjetsDown"    : "flavTagWeight_PSWeightFSR_wjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_PS_ISR_zjetsUp"      : "flavTagWeight_PSWeightISR_zjets_UP/flavTagWeight",
+                   "CMS_flavTag_PS_ISR_zjetsDown"    : "flavTagWeight_PSWeightISR_zjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_PS_FSR_zjetsUp"      : "flavTagWeight_PSWeightFSR_zjets_UP/flavTagWeight",
+                   "CMS_flavTag_PS_FSR_zjetsDown"    : "flavTagWeight_PSWeightFSR_zjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_PS_ISR_dibosonUp"    : "flavTagWeight_PSWeightISR_diboson_UP/flavTagWeight",
+                   "CMS_flavTag_PS_ISR_dibosonDown"  : "flavTagWeight_PSWeightISR_diboson_DOWN/flavTagWeight",
+                   "CMS_flavTag_PS_FSR_dibosonUp"    : "flavTagWeight_PSWeightFSR_diboson_UP/flavTagWeight",
+                   "CMS_flavTag_PS_FSR_dibosonDown"  : "flavTagWeight_PSWeightFSR_diboson_DOWN/flavTagWeight",
+                   "CMS_flavTag_JES_AbsoluteUp"      : "flavTagWeight_JESRegrouped_Absolute_UP/flavTagWeight",
+                   "CMS_flavTag_JES_AbsoluteDown"    : "flavTagWeight_JESRegrouped_Absolute_DOWN/flavTagWeight",
+                   "CMS_flavTag_JES_BBEC1Up"         : "flavTagWeight_JESRegrouped_BBEC1_UP/flavTagWeight",
+                   "CMS_flavTag_JES_BBEC1Down"       : "flavTagWeight_JESRegrouped_BBEC1_DOWN/flavTagWeight",
+                   "CMS_flavTag_JES_FlavorQCDUp"     : "flavTagWeight_JESRegrouped_FlavorQCD_UP/flavTagWeight",
+                   "CMS_flavTag_JES_FlavorQCDDown"   : "flavTagWeight_JESRegrouped_FlavorQCD_DOWN/flavTagWeight",
+                   "CMS_flavTag_JES_RelativeBalUp"   : "flavTagWeight_JESRegrouped_RelativeBal_UP/flavTagWeight",
+                   "CMS_flavTag_JES_RelativeBalDown" : "flavTagWeight_JESRegrouped_RelativeBal_DOWN/flavTagWeight",
+                   "CMS_flavTag_JES_Absolute_%sUp"   % year : "flavTagWeight_JESRegrouped_Absolute_%s_UP/flavTagWeight" % year,
+                   "CMS_flavTag_JES_Absolute_%sDown" % year : "flavTagWeight_JESRegrouped_Absolute_%s_DOWN/flavTagWeight" % year,
+                   "CMS_flavTag_JES_BBEC1_%sUp"      % year : "flavTagWeight_JESRegrouped_BBEC1_%s_UP/flavTagWeight" % year,
+                   "CMS_flavTag_JES_BBEC1_%sDown"    % year : "flavTagWeight_JESRegrouped_BBEC1_%s_DOWN/flavTagWeight" % year,
+                   "CMS_flavTag_JES_RelativeSample_%sUp"   % year : "flavTagWeight_JESRegrouped_RelativeSample_%s_UP/flavTagWeight" % year,
+                   "CMS_flavTag_JES_RelativeSample_%sDown" % year : "flavTagWeight_JESRegrouped_RelativeSample_%s_DOWN/flavTagWeight" % year,
+                   "CMS_flavTag_JEReta0to1p93_%sUp"   % year : "flavTagWeight_JEReta0to1p93_UP/flavTagWeight",
+                   "CMS_flavTag_JEReta0to1p93_%sDown" % year : "flavTagWeight_JEReta0to1p93_DOWN/flavTagWeight",
+                   "CMS_flavTag_JEReta1p93to2p5_%sUp"   % year : "flavTagWeight_JEReta1p93to2p5_UP/flavTagWeight",
+                   "CMS_flavTag_JEReta1p93to2p5_%sDown" % year : "flavTagWeight_JEReta1p93to2p5_DOWN/flavTagWeight",
+                   # Hdamp, b fragmentation, LHE scale, PS weights
+                   "topHdampWeight_%sUp"   % year : f"TOPMLWeight[1]*TOPMLWeightNorm{suffix}[1]",
+                   "topHdampWeight_%sDown" % year : f"TOPMLWeight[3]*TOPMLWeightNorm{suffix}[3]",
+                   "bFragWeight_%sUp"   % year : f"(TOPMLWeight[4]*TOPMLWeightNorm{suffix}[4])/(TOPMLWeight[5]*TOPMLWeightNorm{suffix}[5])", #Divide by bFrag nominal and multiply by bFrag up
+                   "bFragWeight_%sDown" % year : f"1/(TOPMLWeight[5]*TOPMLWeightNorm{suffix}[5])", #The standard samples are effectively bFrag down, so here just dividing by bFrag nominal and its renorm weight
+                   "bFragPetersonWeight_%sUp"   % year : f"(bFragAndDecayWeight[3]*BFragAndDecayWeightNorm{suffix}[3])/(TOPMLWeight[5]*TOPMLWeightNorm{suffix}[5])", #A one-sided systematic
+                   "bFragPetersonWeight_%sDown" % year : f"1.", #Effectively a one-sided systematic
+                   # LHE for minor bkgs
+                   #"LHE_minorBkg_muF_%sUp" % year : "LHEScaleWeight[5]*LHEScaleWeightNorm[5]",
+                   #"LHE_minorBkg_muF_%sDown" % year : "LHEScaleWeight[3]*LHEScaleWeightNorm[3]",
+                   #"LHE_minorBkg_muR_%sUp" % year : "LHEScaleWeight[7]*LHEScaleWeightNorm[7]",
+                   #"LHE_minorBkg_muR_%sDown" % year : "LHEScaleWeight[1]*LHEScaleWeightNorm[1]",
+                   # LHE for large bkgs
+                   "LHE_muF_%sUp"   % year : f"LHEScaleWeight[5]*LHEScaleWeightNorm{suffix}[5]",
+                   "LHE_muF_%sDown" % year : f"LHEScaleWeight[3]*LHEScaleWeightNorm{suffix}[3]",
+                   "LHE_muR_%sUp"   % year : f"LHEScaleWeight[7]*LHEScaleWeightNorm{suffix}[7]",
+                   "LHE_muR_%sDown" % year : f"LHEScaleWeight[1]*LHEScaleWeightNorm{suffix}[1]",
+                   # PS for minor bkgs
+                   "minorBkg_PS_ISR_%sUp"   % year : f"PSWeight[0]*PSWeightNorm{suffix}[0]",
+                   "minorBkg_PS_ISR_%sDown" % year : f"PSWeight[2]*PSWeightNorm{suffix}[2]",
+                   "minorBkg_PS_FSR_%sUp"   % year : f"PSWeight[1]*PSWeightNorm{suffix}[1]",
+                   "minorBkg_PS_FSR_%sDown" % year : f"PSWeight[3]*PSWeightNorm{suffix}[3]",
+                   # PS-fsr for large bkgs
+                   "PS_fsr_G2GG_muR_%sDown" %year : f"PSWeight[6]*PSWeightNorm{suffix}[6]",
+                   "PS_fsr_G2GG_muR_%sUp"   %year : f"PSWeight[7]*PSWeightNorm{suffix}[7]",
+                   "PS_fsr_G2QQ_muR_%sDown" %year : f"PSWeight[8]*PSWeightNorm{suffix}[8]",
+                   "PS_fsr_G2QQ_muR_%sUp"   %year : f"PSWeight[9]*PSWeightNorm{suffix}[9]",                              
+                   "PS_fsr_Q2QG_muR_%sDown" %year : f"PSWeight[10]*PSWeightNorm{suffix}[10]",
+                   "PS_fsr_Q2QG_muR_%sUp"   %year : f"PSWeight[11]*PSWeightNorm{suffix}[11]",                              
+                   "PS_fsr_X2XG_muR_%sDown" %year : f"PSWeight[12]*PSWeightNorm{suffix}[12]",
+                   "PS_fsr_X2XG_muR_%sUp"   %year : f"PSWeight[13]*PSWeightNorm{suffix}[13]",
+                   "PS_fsr_G2GG_cNS_%sDown" %year : f"PSWeight[14]*PSWeightNorm{suffix}[14]",
+                   "PS_fsr_G2GG_cNS_%sUp"   %year : f"PSWeight[15]*PSWeightNorm{suffix}[15]",
+                   "PS_fsr_G2QQ_cNS_%sDown" %year : f"PSWeight[16]*PSWeightNorm{suffix}[16]",
+                   "PS_fsr_G2QQ_cNS_%sUp"   %year : f"PSWeight[17]*PSWeightNorm{suffix}[17]",
+                   "PS_fsr_G2QG_cNS_%sDown" %year : f"PSWeight[18]*PSWeightNorm{suffix}[18]",
+                   "PS_fsr_G2QG_cNS_%sUp"   %year : f"PSWeight[19]*PSWeightNorm{suffix}[19]",
+                   "PS_fsr_X2XG_cNS_%sDown" %year : f"PSWeight[20]*PSWeightNorm{suffix}[20]",
+                   "PS_fsr_X2XG_cNS_%sUp"   %year : f"PSWeight[21]*PSWeightNorm{suffix}[21]",
+                   # PS-isr for large bkgs
+                   "PS_isr_G2GG_muR_%sDown" %year : f"PSWeight[28]*PSWeightNorm{suffix}[28]",
+                   "PS_isr_G2GG_muR_%sUp"   %year : f"PSWeight[29]*PSWeightNorm{suffix}[29]",
+                   "PS_isr_G2QQ_muR_%sDown" %year : f"PSWeight[30]*PSWeightNorm{suffix}[30]",
+                   "PS_isr_G2QQ_muR_%sUp"   %year : f"PSWeight[31]*PSWeightNorm{suffix}[31]",
+                   "PS_isr_Q2QG_muR_%sDown" %year : f"PSWeight[32]*PSWeightNorm{suffix}[32]",
+                   "PS_isr_Q2QG_muR_%sUp"   %year : f"PSWeight[33]*PSWeightNorm{suffix}[33]",
+                   "PS_isr_X2XG_muR_%sDown" %year : f"PSWeight[34]*PSWeightNorm{suffix}[34]",
+                   "PS_isr_X2XG_muR_%sUp"   %year : f"PSWeight[35]*PSWeightNorm{suffix}[35]",
+                   "PS_isr_G2GG_cNS_%sDown" %year : f"PSWeight[36]*PSWeightNorm{suffix}[36]",
+                   "PS_isr_G2GG_cNS_%sUp"   %year : f"PSWeight[37]*PSWeightNorm{suffix}[37]",
+                   "PS_isr_G2QQ_cNS_%sDown" %year : f"PSWeight[38]*PSWeightNorm{suffix}[38]",
+                   "PS_isr_G2QQ_cNS_%sUp"   %year : f"PSWeight[39]*PSWeightNorm{suffix}[39]",
+                   "PS_isr_G2QG_cNS_%sDown" %year : f"PSWeight[40]*PSWeightNorm{suffix}[40]",
+                   "PS_isr_G2QG_cNS_%sUp"   %year : f"PSWeight[41]*PSWeightNorm{suffix}[41]",
+                   "PS_isr_X2XG_cNS_%sDown" %year : f"PSWeight[42]*PSWeightNorm{suffix}[42]",
+                   "PS_isr_X2XG_cNS_%sUp"   %year : f"PSWeight[43]*PSWeightNorm{suffix}[43]",
+               }
     
     return systematics
     
@@ -615,6 +675,14 @@ if __name__ == "__main__":
     parser.add_argument("--eventClassification", nargs="?", const=1, type=bool, default=False, required=False, help="Apply event classification selection.")
     parser.add_argument("--use5FS", nargs="?", const=1, type=bool, default=False, required=False, help="Use 5-flavor scheme.")
     parser.add_argument("--systematics", nargs="?", const=1, type=bool, default=False, required=False, help="Make systematic variations.")
+    parser.add_argument("--flavtag_sf_json", type=str, required=False, default=None,
+                         help="Path to an alternate flavTaggingSF*.json.gz correctionlib file. "
+                              "If given, flavTagWeight is recomputed on the fly from this file "
+                              "instead of using the flavTagWeight branch stored in the ntuple.")
+    parser.add_argument("--flavtag_sf_name", type=str, required=False, default=None,
+                         help="Name of the correction inside --flavtag_sf_json "
+                              "(defaults to the standard per-year name, e.g. particleNetAK4_shape "
+                              "or UParTAK4_pseudocontinuous).")
 
 
     args = parser.parse_args()
@@ -662,7 +730,7 @@ if __name__ == "__main__":
         print(f"{Fore.YELLOW} - {key}: {value}{Style.RESET_ALL}")
 
     # Process the trees and get event counts
-    total_MC_events, events_in_category = process_trees_parallel(input_files, output_files, args.tree_name, hist_configs, args.year, selections, args.eventClassification, use5FS, args.count_events, args.systematics)
+    total_MC_events, events_in_category = process_trees_parallel(input_files, output_files, args.tree_name, hist_configs, args.year, selections, args.eventClassification, use5FS, args.count_events, args.systematics, args.flavtag_sf_json, args.flavtag_sf_name)
 
     # Make sure the previous step is completed before merging files
     ROOT.gSystem.Exec("sync")

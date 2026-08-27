@@ -1,12 +1,14 @@
 #!/bin/sh
 # Preselection score
 PROD_VERSION=07042026
-EXTRA_NAME=CR_tt2b_selection_ge2bge1c_lepEta
+#EXTRA_NAME=CR_ttbb_selection_ge2bge1c_lepEta_muon
+EXTRA_NAME=preselection_withSysts/
 INPUT_DIR=histos_$PROD_VERSION/$EXTRA_NAME/
 OUTPUT_DIR=plots_$PROD_VERSION/$EXTRA_NAME/
-EXTRA_PATH=CR_tt2b_selection_ge2bge1c_lepEta
+#EXTRA_PATH=CR_ttbb_selection_ge2bge1c_lepEta_muon
+EXTRA_PATH=preselection_withSysts/
 SIG_NORM=5
-CONFIG_FILE=configs/hconfig_minimal.csv
+CONFIG_FILE=configs/hconfig_reducedANplots.csv
 
 python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_norm $SIG_NORM --input_csv $CONFIG_FILE --blind
 python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_norm $SIG_NORM --input_csv $CONFIG_FILE --blind --log

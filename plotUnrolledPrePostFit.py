@@ -480,7 +480,7 @@ def plot_unrolled(input_root, output_dir, sig_norm=1.0, log=False, blind=False, 
         ref_line = ROOT.TLine(x_low, 1, x_high, 1)
         CMS.cmsDrawLine(ref_line, lcolor=ROOT.kBlack, lstyle=ROOT.kDotted)
         ratio_from_canvas = CMS.GetcmsCanvasHist(canvas.GetPad(2))
-        ratio_from_canvas.GetYaxis().SetRangeUser(0.5, 1.5)
+        ratio_from_canvas.GetYaxis().SetRangeUser(0.8, 1.2)
 
     plot_name = f"{output_dir}unrolled" if not log else f"{output_dir}/log/unrolled"
     CMS.SaveCanvas(canvas, f"{plot_name}.png", False)
