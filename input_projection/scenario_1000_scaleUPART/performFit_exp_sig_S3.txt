@@ -1,0 +1,15 @@
+ <<< Combine >>> 
+ <<< v10.6.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is Significance
+Missing background ModelConfig 'ModelConfig_bonly' in workspace 'w' in file /afs/cern.ch/work/s/sewuchte/private/VCB/CMSSW_15_0_10/src/PlotTools/input_projection/scenario_1000_scaleUPART/workspace_S3.root
+Will make one from the signal ModelConfig 'ModelConfig' setting signal strength 'r' to zero
+interpreting xsec_tt* as regex 
+Set Default Value of Parameter lumiscale To : 9.09
+interpreting xsec_tt* as regex 
+Set Default Value of Parameter r To : 1
+>>> 0 out of 8 channels masked
+
+
+ -- Significance -- 
+Significance: 7.06444

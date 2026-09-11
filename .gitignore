@@ -1,0 +1,34 @@
+Datacards_*
+FitStudies_*
+BestOrder_raw/
+*.log
+*.root
+*.hdf5
+*.cc
+*.out
+*Templates*
+*.pdf
+*.png
+
+# rabbit pipeline generated reports (tensors/plots already covered above;
+# configs/*.csv are real inputs, these suffixes never collide with them)
+*_decisions.csv
+*_symmetrisation.csv
+*_report.json
+*_summary.npz
+
+# python
+__pycache__/
+*.pyc
+
+# rabbit venv (see setup_rabbit_env.sh to rebuild)
+rabbit_env/
+
+# nested independent repo, not vendored here
+datacards/
+
+# agent/AI tooling config, not project docs
+.claude/
+.agents/
+CLAUDE.md
+AGENTS.md

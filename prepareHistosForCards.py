@@ -6,6 +6,7 @@ import os
 from colorama import Fore, Style
 import multiprocessing as mp
 from functools import partial
+import flavTagWeightPlugin
 
 ROOT.ROOT.EnableImplicitMT()
 ROOT.gROOT.SetBatch(True)
@@ -18,7 +19,7 @@ tt_5fs_replacement_processes = ['ttbb', 'ttbj', 'tt2b']
 
 JME_scaling_factors = {"ttWcb": 6.26, "ttLF": 4.88, "ttbb": 4.61, "tt2b": 5.02, "ttbj": 5.51, "ttcc": 4.43, "tt2c": 5.13, "ttcj": 5.50}
 
-def process_tree(infile, output_files, tree_name, year, selections, adhoc_selection, adhoc_binning, perProcessSysts, mc_data_obs_5fs=False, mc_data_obs_4fs_mc_5fs=False):
+def process_tree(infile, output_files, tree_name, year, selections, adhoc_selection, adhoc_binning, perProcessSysts, mc_data_obs_5fs=False, mc_data_obs_4fs_mc_5fs=False, flavtag_sf_json=None, flavtag_sf_name=None):
     """
     Processes a TTree, converts it to multiple TH1Ds for specified branches, and saves them to ROOT files.
 
@@ -31,6 +32,10 @@ def process_tree(infile, output_files, tree_name, year, selections, adhoc_select
     - adhoc_selection: Dictionary containing an ad-hoc event selection to fill the scores.
     - adhoc_binning: Dictionary containing ad-hoc binning for the scores.
     - perProcessSysts: List of systematic shape variations that must be produced per process.
+    - flavtag_sf_json: Optional path to an alternate flavTaggingSF*.json.gz file; if given,
+      the flavour-tagging weight and all of its systematic variations are recomputed on the
+      fly from this file instead of using the flavTagWeight* branches stored in the ntuple.
+    - flavtag_sf_name: Optional correctionlib correction name inside flavtag_sf_json.
     """
 
     print(f"{Fore.RED}Processing file: {infile}{Style.RESET_ALL}")
@@ -60,6 +65,17 @@ def process_tree(infile, output_files, tree_name, year, selections, adhoc_select
     if "singlee" in infile:
         base_filter += " && passTrigMu==0" # Remove from the electron channel the events that fired the muon trigger. Could choose to do vice versa as well.
     df = df.Filter(base_filter)
+
+    # Recompute the flavour-tagging weight (central value and every systematic variation
+    # referenced by produce_systematics) on the fly from an alternate correctionlib SF file,
+    # instead of relying on the flavTagWeight* branches already stored in the ntuple.
+    # The flavour-tagging entries do not depend on the per-category suffix, so the set of
+    # needed variations can be collected once from the suffix-less systematics dictionary.
+    flavtag_prefix = flavTagWeightPlugin.STORED_WEIGHT_NAME
+    if flavtag_sf_json and "data" not in infile and "Data" not in infile:
+        df, flavtag_prefix = flavTagWeightPlugin.define_flavtag_weights(
+            df, year, json_path=flavtag_sf_json, correction_name=flavtag_sf_name,
+            systematics=flavTagWeightPlugin.extract_systematics(produce_systematics(year, '').values()))
 
     # Define the fractional scores
     df = df.Define("denominator", "score_ttbb + score_tt2b + score_ttbj + score_ttcc + score_tt2c + score_ttcj + score_ttLF") \
@@ -110,6 +126,11 @@ def process_tree(infile, output_files, tree_name, year, selections, adhoc_select
         # Fetch dictionary of systematics and assign event weight based on data taking year and process type
         systematics = produce_systematics(year, suffix)
 
+        # Point the flavour-tagging terms at the recomputed columns, if we are using an
+        # alternate SF file (no-op when flavtag_prefix is the stored branch name).
+        systematics = {name: flavTagWeightPlugin.remap_expression(expr, flavtag_prefix)
+                       for name, expr in systematics.items()}
+
         for syst in systematics.keys():
             # For the optional MC-based data_obs, produce only nominal 5FS proxy templates.
             if is_5fs_proxy_selection and syst != "None":
@@ -127,16 +148,16 @@ def process_tree(infile, output_files, tree_name, year, selections, adhoc_select
                 continue # Minor background systematics do not pertain to ttbar processes
 
             if syst == "None":
-                weight = assign_event_weight(year, suffix, infile)
+                weight = assign_event_weight(year, infile, suffix, flavtag_weight_branch=flavtag_prefix)
             else:
-                weight = assign_event_weight(year, suffix, infile, systematics[syst])
+                weight = assign_event_weight(year, infile, suffix, systematics[syst], flavtag_weight_branch=flavtag_prefix)
 
             # If weight is a complex expression, define it as a new column
             weight_column = f"weight_{selection_name}_{syst}"
             if "data" not in infile and "Data" not in infile:
                 df_selected = df_selected.Define(weight_column, weight)
             else: 
-                df_selected = df_selected.Define(weight_column, "(!jetVetoMapEventVeto)") # Apply jet veto map for data as well
+                df_selected = df_selected.Define(weight_column, "1") # Apply jet veto map for data as well
 
             final_df = dict()
             for (score, adhoc_sel), outfile in zip(adhoc_selection.items(), output_files):
@@ -165,31 +186,31 @@ def process_tree(infile, output_files, tree_name, year, selections, adhoc_select
                 final_df[score] = df_selected.Filter(adhoc_sel)
 
                 #JME stuff
-                JME_weight_column = f"JME_weight_{weight_column}"
-                if "data" in infile or "Data" in infile:
-                    JME_weight_column = weight_column
-                elif "data" not in infile and "Data" not in infile and "Wcb" in outfile:    
-                    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*6.26")
-                elif "data" not in infile and "Data" not in infile and "LF" in outfile:
-                    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*4.88")
-                elif "data" not in infile and "Data" not in infile and "BB" in outfile:
-                    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*4.61")
-                elif "data" not in infile and "Data" not in infile and "2B" in outfile:
-                    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*5.02")
-                elif "data" not in infile and "Data" not in infile and "BJ" in outfile:
-                    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*5.51")
-                elif "data" not in infile and "Data" not in infile and "CC" in outfile:
-                    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*4.43")
-                elif "data" not in infile and "Data" not in infile and "2C" in outfile:
-                    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*5.13")
-                elif "data" not in infile and "Data" not in infile and "CJ" in outfile:
-                    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*5.50")
+                #JME_weight_column = f"JME_weight_{weight_column}"
+                #if "data" in infile or "Data" in infile:
+                #    JME_weight_column = weight_column
+                #elif "data" not in infile and "Data" not in infile and "Wcb" in outfile:    
+                #    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*6.26")
+                #elif "data" not in infile and "Data" not in infile and "LF" in outfile:
+                #    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*4.88")
+                #elif "data" not in infile and "Data" not in infile and "BB" in outfile:
+                #    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*4.61")
+                #elif "data" not in infile and "Data" not in infile and "2B" in outfile:
+                #    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*5.02")
+                #elif "data" not in infile and "Data" not in infile and "BJ" in outfile:
+                #    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*5.51")
+                #elif "data" not in infile and "Data" not in infile and "CC" in outfile:
+                #    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*4.43")
+                #elif "data" not in infile and "Data" not in infile and "2C" in outfile:
+                #    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*5.13")
+                #elif "data" not in infile and "Data" not in infile and "CJ" in outfile:
+                #    final_df[score] = final_df[score].Define(JME_weight_column, f"{weight}*5.50")
 
                 hist_key = (selection_name, outfile, hist_name, score)
                 histograms[hist_key] = final_df[score].Histo1D(
                     (hist_name, f"Histogram of {score} for process {hist_name}", 
                      len(adhoc_binning[score])-1, adhoc_binning[score]), 
-                    score, JME_weight_column
+                    score, weight_column
                 )
 
             if "Data" in infile or "data" in infile: break # Do not continue with the systematic variations for collision data
@@ -219,19 +240,21 @@ def process_tree(infile, output_files, tree_name, year, selections, adhoc_select
 
 
 
-def process_trees_parallel(input_files, output_files, tree_name, year, selections, adhoc_selection, adhoc_binning, perProcessSysts, nproc=1, mc_data_obs_5fs=False, mc_data_obs_4fs_mc_5fs=False):
+def process_trees_parallel(input_files, output_files, tree_name, year, selections, adhoc_selection, adhoc_binning, perProcessSysts, nproc=1, mc_data_obs_5fs=False, mc_data_obs_4fs_mc_5fs=False, flavtag_sf_json=None, flavtag_sf_name=None):
 
     process_func = partial(
-        process_tree, 
+        process_tree,
         output_files=output_files,
-        tree_name=tree_name, 
+        tree_name=tree_name,
         year=year,
         selections=selections,
         adhoc_selection=adhoc_selection,
         adhoc_binning=adhoc_binning,
         perProcessSysts=perProcessSysts,
         mc_data_obs_5fs=mc_data_obs_5fs,
-        mc_data_obs_4fs_mc_5fs=mc_data_obs_4fs_mc_5fs
+        mc_data_obs_4fs_mc_5fs=mc_data_obs_4fs_mc_5fs,
+        flavtag_sf_json=flavtag_sf_json,
+        flavtag_sf_name=flavtag_sf_name
     )
 
     # ROOT files are not safe for concurrent UPDATE writes from multiple processes.
@@ -317,7 +340,7 @@ def process_tree_extra_syst(infile, output_files, tree_name, year, selections, a
             df_selected = df
 
         # Keep same weight convention as nominal histogram production.
-        weight = assign_event_weight(year, suffix, infile)
+        weight = assign_event_weight(year, infile, suffix)
         weight_column = f"weight_{selection_name}_{extra_syst_name}"
 
         #if not "data" in infile and not "Data" in infile:
@@ -327,7 +350,7 @@ def process_tree_extra_syst(infile, output_files, tree_name, year, selections, a
         if "data" not in infile and "Data" not in infile:
             df_selected = df_selected.Define(weight_column, weight)
         else:
-            df_selected = df_selected.Define(weight_column, "jetVetoMapEventVeto")
+            df_selected = df_selected.Define(weight_column, "1")
 
         final_df = {}
         for (score, adhoc_sel), outfile in zip(adhoc_selection.items(), output_files):
@@ -480,7 +503,7 @@ def prepare_output(output_dir, year, categories, prepend, append):
 
 
 
-def assign_event_weight(year, infile, suffix, syst=""):
+def assign_event_weight(year, infile, suffix, syst="", flavtag_weight_branch="flavTagWeight"):
     """
     Define the MC event weight according to the year. Collision data should be handled separately.
 
@@ -488,14 +511,16 @@ def assign_event_weight(year, infile, suffix, syst=""):
     - year: Data taking year.
     - infile: Input file.
     - syst: Systematic uncertainty string.
+    - flavtag_weight_branch: Name of the branch/column to use for the flavour-tagging
+      weight term (defaults to the "flavTagWeight" branch stored in the ntuple; pass
+      the column defined by flavTagWeightPlugin.define_flavtag_weights to use a weight
+      recomputed on the fly from an alternate correctionlib SF file instead).
     """
     weight = "1"
     if year == 2024 or year == 2025:
-        weight = "lumiwgt*genWeight*xsecWeight*puWeight*muEffWeight*elEffWeight*flavTagWeight*(((abs(lep1_pdgId)==11 && passTrigEl) || (abs(lep1_pdgId)==13 && passTrigMu)) && passmetfilters)*(!jetVetoMapEventVeto)"
-    if "ttbar" in infile or "tt-vcb" in infile:
+        weight = f"lumiwgt*genWeight*xsecWeight*puWeight*muEffWeight*elEffWeight*{flavtag_weight_branch}*(((abs(lep1_pdgId)==11 && passTrigEl) || (abs(lep1_pdgId)==13 && passTrigMu)) && passmetfilters)"
+    if "ttbar" in infile or "4f" in infile or "tt-vcb" in infile:
         weight = f"{weight}*TopPtWeight[1]*TopPtWeightNorm{suffix}[1]*TOPMLWeight[5]*TOPMLWeightNorm{suffix}[5]" #TOPMLWeight[5] is b-fragmentation nominal
-    if "4f" in infile:
-        weight = f"{weight}*TopPtWeight[1]*TopPtWeightNorm{suffix}[1]*TOPMLWeight[5]*TOPMLWeightNorm{suffix}[5]"#*0.7559" # 5FS / 4FS for tt+B component
     
     if not syst == "":
         weight = f"{weight}*{syst}"
@@ -565,6 +590,14 @@ if __name__ == "__main__":
     parser.add_argument("--extra_syst_dir", type=str,help="Directory containing extra shape systematics in per-systematic subfolders.")
     parser.add_argument("--mc_data_obs_5fs", nargs="?", const=1, type=bool, default=False, required=False, help="Build data_obs from summed MC and use 5FS templates for ttbb/ttbj/tt2b when available.")
     parser.add_argument("--mc_data_obs_4fs_mc_5fs", nargs="?", const=1, type=bool, default=False, required=False, help="Build data_obs from summed MC using 4FS ttbb/ttbj/tt2b, while nominal MC templates for ttbb/ttbj/tt2b use 5FS.")
+    parser.add_argument("--flavtag_sf_json", type=str, required=False, default=None,
+                        help="Path to an alternate flavTaggingSF*.json.gz correctionlib file. If given, "
+                             "the flavour-tagging weight and all of its systematic variations are recomputed "
+                             "on the fly from this file instead of using the flavTagWeight* branches stored "
+                             "in the ntuple.")
+    parser.add_argument("--flavtag_sf_name", type=str, required=False, default=None,
+                        help="Name of the correction inside --flavtag_sf_json (defaults to the standard "
+                             "per-year name, e.g. particleNetAK4_shape or UParTAK4_pseudocontinuous).")
 
     args = parser.parse_args()
 
@@ -584,7 +617,7 @@ if __name__ == "__main__":
 
     # Define event selections. Some are process-specific.
     selections = {#"base": "n_ak4>=4 && (n_btagM+n_ctagM)>=3 && n_btagM>=1",
-                 "base": "n_ak4>=4 && (n_btagM+n_ctagM)>=3 && n_btagM>=2 && n_ctagM>=1",
+                 "base": "n_ak4>=4 && n_btagM>=2 && n_ctagM>=1",
                  "ttbb" : "genEventClassifier==9",
                  "ttbj" : "genEventClassifier==7",
                  "tt2b" : "genEventClassifier==8",
@@ -628,6 +661,14 @@ if __name__ == "__main__":
                    "CMS_muScaleUp"   : "muScale_UP",
                    "CMS_muScaleDown" : "muScale_DOWN",
                    # Flavor tagging
+                   "CMS_flavTag_TTWeight_ttbarUp"     : "flavTagWeight_TTWeight_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_TTWeight_ttbarDown"   : "flavTagWeight_TTWeight_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_HDamp_ttbarUp"        : "flavTagWeight_HDamp_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_HDamp_ttbarDown"      : "flavTagWeight_HDamp_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_BDecay_ttbarUp"       : "flavTagWeight_BDecay_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_BDecay_ttbarDown"     : "flavTagWeight_BDecay_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_CDecay_ttbarUp"       : "flavTagWeight_CDecay_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_CDecay_ttbarDown"     : "flavTagWeight_CDecay_ttbar_DOWN/flavTagWeight",
                    "CMS_flavTag_xsec_ttbarUp"         : "flavTagWeight_XSec_ttbar_UP/flavTagWeight",
                    "CMS_flavTag_xsec_ttbarDown"       : "flavTagWeight_XSec_ttbar_DOWN/flavTagWeight",
                    "CMS_flavTag_xsec_wjets_cUp"       : "flavTagWeight_XSec_WJets_c_UP/flavTagWeight",
@@ -654,18 +695,22 @@ if __name__ == "__main__":
                    "CMS_flavTag_EleScaleDown"         : "flavTagWeight_Ele_Scale_DOWN/flavTagWeight",
                    "CMS_flavTag_EleSmearUp"           : "flavTagWeight_Ele_Smear_UP/flavTagWeight",
                    "CMS_flavTag_EleSmearDown"         : "flavTagWeight_Ele_Smear_DOWN/flavTagWeight",
-                   "CMS_flavTag_ElePromptMVAUp"       : "flavTagWeight_Ele_PromptMVA_UP/flavTagWeight",
-                   "CMS_flavTag_ElePromptMVADown"     : "flavTagWeight_Ele_PromptMVA_DOWN/flavTagWeight",
+                   "CMS_flavTag_EleIDUp"              : "flavTagWeight_Ele_ID_UP/flavTagWeight",
+                   "CMS_flavTag_EleIDDown"            : "flavTagWeight_Ele_ID_DOWN/flavTagWeight",
                    "CMS_flavTag_EleTriggerUp"         : "flavTagWeight_Ele_Trigger_UP/flavTagWeight",
                    "CMS_flavTag_EleTriggerDown"       : "flavTagWeight_Ele_Trigger_DOWN/flavTagWeight",
-                   "CMS_flavTag_MuPromptMVAUp"        : "flavTagWeight_Mu_PromptMVA_UP/flavTagWeight",
-                   "CMS_flavTag_MuPromptMVADown"      : "flavTagWeight_Mu_PromptMVA_DOWN/flavTagWeight",
+                   "CMS_flavTag_MuIDUp"               : "flavTagWeight_Mu_ID_UP/flavTagWeight",
+                   "CMS_flavTag_MuIDDown"             : "flavTagWeight_Mu_ID_DOWN/flavTagWeight",
+                   "CMS_flavTag_MuIsoUp"              : "flavTagWeight_Mu_Iso_UP/flavTagWeight",
+                   "CMS_flavTag_MuIsoDown"            : "flavTagWeight_Mu_Iso_DOWN/flavTagWeight",
                    "CMS_flavTag_MuScaleUp"            : "flavTagWeight_Mu_Scale_UP/flavTagWeight",
                    "CMS_flavTag_MuScaleDown"          : "flavTagWeight_Mu_Scale_DOWN/flavTagWeight",
                    "CMS_flavTag_MuResolUp"            : "flavTagWeight_Mu_Resol_UP/flavTagWeight",
                    "CMS_flavTag_MuResolDown"          : "flavTagWeight_Mu_Resol_DOWN/flavTagWeight",
                    "CMS_flavTag_MuTriggerUp"          : "flavTagWeight_Mu_Trigger_UP/flavTagWeight",
                    "CMS_flavTag_MuTriggerDown"        : "flavTagWeight_Mu_Trigger_DOWN/flavTagWeight",
+                   "CMS_flavTag_MET_UnclEnergyUp"     : "flavTagWeight_MET_UnclEnergy_UP/flavTagWeight",
+                   "CMS_flavTag_MET_UnclEnergyDown"   : "flavTagWeight_MET_UnclEnergy_DOWN/flavTagWeight",
                    "CMS_flavTag_Stat_flavB_C0_%sUp"   % year : "flavTagWeight_Stat_flavB_C0_UP/flavTagWeight",
                    "CMS_flavTag_Stat_flavB_C0_%sDown" % year : "flavTagWeight_Stat_flavB_C0_DOWN/flavTagWeight",
                    "CMS_flavTag_Stat_flavB_C1_%sUp"   % year : "flavTagWeight_Stat_flavB_C1_UP/flavTagWeight",
@@ -746,6 +791,26 @@ if __name__ == "__main__":
                    "CMS_flavTag_LHE_muF_dibosonDown" : "flavTagWeight_LHEScaleWeight_muF_diboson_DOWN/flavTagWeight",
                    "CMS_flavTag_LHE_muR_dibosonUp"   : "flavTagWeight_LHEScaleWeight_muR_diboson_UP/flavTagWeight",
                    "CMS_flavTag_LHE_muR_dibosonDown" : "flavTagWeight_LHEScaleWeight_muR_diboson_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_ttbarUp"     : "flavTagWeight_LHEScaleWeight_PDF_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_ttbarDown"   : "flavTagWeight_LHEScaleWeight_PDF_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_singletUp"   : "flavTagWeight_LHEScaleWeight_PDF_singlet_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_singletDown" : "flavTagWeight_LHEScaleWeight_PDF_singlet_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_wjetsUp"     : "flavTagWeight_LHEScaleWeight_PDF_wjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_wjetsDown"   : "flavTagWeight_LHEScaleWeight_PDF_wjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_zjetsUp"     : "flavTagWeight_LHEScaleWeight_PDF_zjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_zjetsDown"   : "flavTagWeight_LHEScaleWeight_PDF_zjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_dibosonUp"   : "flavTagWeight_LHEScaleWeight_PDF_diboson_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_PDF_dibosonDown" : "flavTagWeight_LHEScaleWeight_PDF_diboson_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_ttbarUp"      : "flavTagWeight_LHEScaleWeight_aS_ttbar_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_ttbarDown"    : "flavTagWeight_LHEScaleWeight_aS_ttbar_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_singletUp"    : "flavTagWeight_LHEScaleWeight_aS_singlet_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_singletDown"  : "flavTagWeight_LHEScaleWeight_aS_singlet_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_wjetsUp"      : "flavTagWeight_LHEScaleWeight_aS_wjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_wjetsDown"    : "flavTagWeight_LHEScaleWeight_aS_wjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_zjetsUp"      : "flavTagWeight_LHEScaleWeight_aS_zjets_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_zjetsDown"    : "flavTagWeight_LHEScaleWeight_aS_zjets_DOWN/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_dibosonUp"    : "flavTagWeight_LHEScaleWeight_aS_diboson_UP/flavTagWeight",
+                   "CMS_flavTag_LHE_aS_dibosonDown"  : "flavTagWeight_LHEScaleWeight_aS_diboson_DOWN/flavTagWeight",
                    "CMS_flavTag_PS_ISR_ttbarUp"      : "flavTagWeight_PSWeightISR_ttbar_UP/flavTagWeight",
                    "CMS_flavTag_PS_ISR_ttbarDown"    : "flavTagWeight_PSWeightISR_ttbar_DOWN/flavTagWeight",
                    "CMS_flavTag_PS_FSR_ttbarUp"      : "flavTagWeight_PSWeightFSR_ttbar_UP/flavTagWeight",
@@ -780,8 +845,10 @@ if __name__ == "__main__":
                    "CMS_flavTag_JES_BBEC1_%sDown"    % year : "flavTagWeight_JESRegrouped_BBEC1_%s_DOWN/flavTagWeight" % year,
                    "CMS_flavTag_JES_RelativeSample_%sUp"   % year : "flavTagWeight_JESRegrouped_RelativeSample_%s_UP/flavTagWeight" % year,
                    "CMS_flavTag_JES_RelativeSample_%sDown" % year : "flavTagWeight_JESRegrouped_RelativeSample_%s_DOWN/flavTagWeight" % year,
-                   "CMS_flavTag_JER_%sUp"   % year : "flavTagWeight_JER_UP/flavTagWeight",
-                   "CMS_flavTag_JER_%sDown" % year : "flavTagWeight_JER_DOWN/flavTagWeight",
+                   "CMS_flavTag_JEReta0to1p93_%sUp"   % year : "flavTagWeight_JEReta0to1p93_UP/flavTagWeight",
+                   "CMS_flavTag_JEReta0to1p93_%sDown" % year : "flavTagWeight_JEReta0to1p93_DOWN/flavTagWeight",
+                   "CMS_flavTag_JEReta1p93to2p5_%sUp"   % year : "flavTagWeight_JEReta1p93to2p5_UP/flavTagWeight",
+                   "CMS_flavTag_JEReta1p93to2p5_%sDown" % year : "flavTagWeight_JEReta1p93to2p5_DOWN/flavTagWeight",
                    # Hdamp, b fragmentation, LHE scale, PS weights
                    "topHdampWeight_%sUp"   % year : f"TOPMLWeight[1]*TOPMLWeightNorm{suffix}[1]",
                    "topHdampWeight_%sDown" % year : f"TOPMLWeight[3]*TOPMLWeightNorm{suffix}[3]",
@@ -849,7 +916,7 @@ if __name__ == "__main__":
     if args.mc_data_obs_5fs and args.mc_data_obs_4fs_mc_5fs:
         raise ValueError("--mc_data_obs_5fs and --mc_data_obs_4fs_mc_5fs are mutually exclusive.")
 
-    process_trees_parallel(input_files, output_files, args.tree_name, args.year, selections, adhoc_selection, adhoc_binning, perProcessSysts, nprocs, args.mc_data_obs_5fs, args.mc_data_obs_4fs_mc_5fs)
+    process_trees_parallel(input_files, output_files, args.tree_name, args.year, selections, adhoc_selection, adhoc_binning, perProcessSysts, nprocs, args.mc_data_obs_5fs, args.mc_data_obs_4fs_mc_5fs, args.flavtag_sf_json, args.flavtag_sf_name)
 
     add_extra_systematic_histograms(
         args.extra_syst_dir,

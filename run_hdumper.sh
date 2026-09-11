@@ -2,35 +2,36 @@
 # This script is used to run the hdumper to make histograms
 INPUT_DIR=/eos/cms/store/cmst3/group/top/rsalvatico/Vcb_analysis_07042026_2024_1L_Wcb/
 PROD_VERSION=07042026
-CONFIG_FILE=configs/hconfig_minimal.csv
-#EXTRA_NAME=preselection_ge2bge1c_separateProcesses
+CONFIG_FILE=configs/hconfig.csv
+EXTRA_NAME=preselection_ge2bge1c_new2024FlavTagSFs
 
 YEAR=2024
 
-declare -A w=(
-    [ttbb]=0.0709 [tt2b]=0.0378 [ttbj]=0.0863
-    [ttcc]=0.0676 [tt2c]=0.0868 [ttcj]=0.1154 [ttLF]=0.5351
-)
-categories=(ttbb tt2b ttbj ttcc tt2c ttcj ttLF)
-
-cat=ttLF
-EXTRA_NAME=CR_${cat}_selection_ge2bge1c_lepEta
+#declare -A w=(
+#    [ttbb]=0.0709 [tt2b]=0.0378 [ttbj]=0.0863
+#    [ttcc]=0.0676 [tt2c]=0.0868 [ttcj]=0.1154 [ttLF]=0.5351
+#)
+#categories=(ttbb tt2b ttbj ttcc tt2c ttcj ttLF)
+#
+#cat=ttbj
+#EXTRA_NAME=CR_${cat}_selection_ge2bge1c_lepEta_5FS
+#OUTPUT_DIR=histos_$PROD_VERSION/$EXTRA_NAME/
+#parts=()
+#for other in "${categories[@]}"; do
+#    [[ "$other" == "$cat" ]] && continue
+#    parts+=("${w[$cat]}*score_${cat} > ${w[$other]}*score_${other}")
+#done
+#conditions=$(printf '%s && ' "${parts[@]}"); conditions=${conditions% && }
+#
+#EXTRA_SELECTION="score_ttLF < 0.1 && score_tt_Wcb < 0.8"
 OUTPUT_DIR=histos_$PROD_VERSION/$EXTRA_NAME/
-parts=()
-for other in "${categories[@]}"; do
-    [[ "$other" == "$cat" ]] && continue
-    parts+=("${w[$cat]}*score_${cat} > ${w[$other]}*score_${other}")
-done
-conditions=$(printf '%s && ' "${parts[@]}"); conditions=${conditions% && }
+FLAVTAG_SF_JSON=$CMSSW_BASE/src/PhysicsTools/NanoTTH/data/flavTagSF/flavTaggingSF_2024.json.gz
 
-EXTRA_SELECTION="score_ttLF < 0.1 && score_tt_Wcb < 0.8"
-OUTPUT_DIR=histos_$PROD_VERSION/$EXTRA_NAME/
+python3 hdumper.py --input_dirs $INPUT_DIR/mc/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --flavtag_sf_json $FLAVTAG_SF_JSON
+python3 hdumper.py --input_dirs $INPUT_DIR/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --flavtag_sf_json $FLAVTAG_SF_JSON
 
-#python3 hdumper.py --input_dirs $INPUT_DIR/mc/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR
-#python3 hdumper.py --input_dirs $INPUT_DIR/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR
-
-python3 hdumper.py --input_dirs $INPUT_DIR/mc/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --add_selection "$EXTRA_SELECTION && $conditions" --systematics
-python3 hdumper.py --input_dirs $INPUT_DIR/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --add_selection "$EXTRA_SELECTION && $conditions" --systematics
+#python3 hdumper.py --input_dirs $INPUT_DIR/mc/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --add_selection "$EXTRA_SELECTION && $conditions" --systematics --use5FS
+#python3 hdumper.py --input_dirs $INPUT_DIR/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --add_selection "$EXTRA_SELECTION && $conditions" --systematics --use5FS
 
 #python3 hdumper.py --input_dirs /eos/cms/store/cmst3/group/top/rsalvatico/Vcb_analysis_07012026_2024_1L_Wcb/mc/ --output_dir histos_07012026/ttLFm0p1_ttWcbm0p7/allPlots/  --tree_name Events --input_csv configs/hconfig.csv --year 2024 --add_selection "score_ttLF < 0.1 && score_tt_Wcb < 0.7"
 #python3 hdumper.py --input_dirs /eos/cms/store/cmst3/group/top/rsalvatico/Vcb_analysis_07012026_2024_1L_Wcb/data/ --output_dir histos_07012026/ttLFm0p1_ttWcbm0p7/allPlots/ --tree_name Events --input_csv configs/hconfig.csv --year 2024 --add_selection "score_ttLF < 0.1 && score_tt_Wcb < 0.7"

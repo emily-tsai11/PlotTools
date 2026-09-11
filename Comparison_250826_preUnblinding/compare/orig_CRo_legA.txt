@@ -1,0 +1,52 @@
+417 shared parameters, 67 combine-only, 1 rabbit-only
+  combine-only: ['prop_binVcb_cat2B_CR_bin0', 'prop_binVcb_cat2B_CR_bin1', 'prop_binVcb_cat2B_CR_bin2', 'prop_binVcb_cat2B_CR_bin3', 'prop_binVcb_cat2B_CR_bin4', 'prop_binVcb_cat2B_CR_bin5', 'prop_binVcb_cat2B_CR_bin6', 'prop_binVcb_cat2B_CR_bin7', 'prop_binVcb_cat2C_CR_bin0', 'prop_binVcb_cat2C_CR_bin1', 'prop_binVcb_cat2C_CR_bin2', 'prop_binVcb_cat2C_CR_bin3'] ...
+  rabbit-only : ['tt-vcb']
+
+  |dvalue|/sigma : max 0.588  median 0.0051
+  error ratio    : min 0.210  max 3.201  median 1.0000
+
+  84 parameters outside tolerance (dv/sigma > 0.05, |ratio-1| > 0.05)
+
+parameter                                         combine             rabbit   dv/sig  err ratio
+CMS_flavTag_Stat_flavC_B0_2024            0.7835+-0.3922     0.5529+-0.3563    -0.588      0.908
+CMS_flavTag_Stat_flavL_C3_2024            0.2294+-0.5707    -0.0513+-0.5891    -0.492      1.032
+xsec_ttcj                                 0.9812+-0.3184     1.1188+-0.2691     0.432      0.845
+xsec_tt2c                                 0.5237+-0.3728     0.6549+-0.4647     0.352      1.247
+CMS_flavTag_Stat_flavL_B1_2024            0.9327+-0.7906     0.6744+-0.8610    -0.327      1.089
+CMS_flavTag_Stat_flavL_B0_2024            0.7526+-0.3037     0.8486+-0.4062     0.316      1.337
+topHdampWeight_ttLF_2024                  0.0140+-0.8745    -0.2268+-0.8962    -0.275      1.025
+CMS_flavTag_PS_FSR_zjets                  0.1879+-1.0169    -0.0821+-1.8646    -0.266      1.834
+xsec_ttcc                                 0.6927+-0.1500     0.7291+-0.1672     0.243      1.115
+CMS_flavTag_Stat_flavC_C2_2024            0.4831+-0.2847     0.4224+-0.3480    -0.213      1.222
+PS_fsr_Q2QG_muR_ttLF_2024                -0.7512+-0.8328    -0.9133+-0.8804    -0.195      1.057
+CMS_flavTag_Stat_flavL_C4_2024            0.5694+-0.3687     0.6381+-0.4954     0.186      1.344
+CMS_flavTag_Stat_flavC_B1_2024            1.1721+-0.7964     1.0463+-0.7337    -0.158      0.921
+jer                                       0.4023+-0.4561     0.3370+-0.5095    -0.143      1.117
+norm_ttbb-dps                             0.7554+-1.2191     0.9240+-1.2281     0.138      1.007
+minorBkg_PS_FSR_wjets_2024               -0.9196+-0.8633    -0.8044+-0.8388     0.133      0.972
+xsec_ttbb                                 0.7604+-0.1101     0.7734+-0.1188     0.118      1.079
+CMS_flavTag_Stat_flavB_C0_2024            0.6270+-0.9373     0.7312+-0.9637     0.111      1.028
+CMS_flavTag_JES_BBEC1_2024               -0.0493+-1.4862    -0.1944+-1.3160    -0.098      0.885
+CMS_flavTag_JES_RelativeBal               0.1531+-0.0000     0.2485+-1.0576     0.095        nan
+jes_Absolute_2024                         0.1895+-0.8128     0.1124+-0.4977    -0.095      0.612
+LHE_muR_tt2c_2024                        -0.1059+-1.0232    -0.1984+-1.0360    -0.090      1.012
+CMS_flavTag_Stat_flavC_B2_2024            0.0133+-1.0371    -0.0796+-0.9947    -0.090      0.959
+LHE_muR_ttLF_2024                        -0.1781+-0.9781    -0.0907+-0.9543     0.089      0.976
+norm_singletop                           -0.7209+-0.8034    -0.6509+-0.7750     0.087      0.965
+CMS_flavTag_Stat_flavC_C1_2024           -0.2215+-0.3670    -0.2531+-0.3872    -0.086      1.055
+CMS_flavTag_LHE_muF_zjets                 0.0976+-1.0156     0.0104+-1.3841    -0.086      1.363
+CMS_flavTag_Stat_flavL_C2_2024            0.3279+-0.2158     0.3095+-0.2103    -0.085      0.974
+CMS_flavTag_PS_ISR_zjets                 -0.0393+-1.1159    -0.1284+-1.1134    -0.080      0.998
+PS_fsr_X2XG_muR_ttbb_2024                -0.0279+-0.9872    -0.1055+-0.9992    -0.079      1.012
+PS_fsr_X2XG_muR_ttcj_2024                -0.1594+-1.0321    -0.2367+-1.0061    -0.075      0.975
+PS_fsr_X2XG_muR_ttcc_2024                -0.0565+-1.0254    -0.1305+-1.0857    -0.072      1.059
+PS_fsr_G2GG_muR_ttbj_2024                -0.0815+-0.9859    -0.0110+-1.0219     0.071      1.036
+xsec_ttLF                                 0.8295+-0.0488     0.8330+-0.0543     0.071      1.113
+jes_BBEC1                                -0.2235+-0.0000    -0.2920+-0.7296    -0.068        nan
+topHdampWeight_ttcj_2024                  0.0898+-0.9804     0.1542+-0.9498     0.066      0.969
+topHdampWeight_tt2c_2024                  0.0994+-0.9964     0.1632+-1.0082     0.064      1.012
+PS_fsr_Q2QG_muR_tt2c_2024                -0.1077+-1.0662    -0.1747+-1.1079    -0.063      1.039
+PS_fsr_G2GG_muR_ttcj_2024                 0.2540+-0.8584     0.2025+-0.8250    -0.060      0.961
+PS_isr_G2GG_muR_ttLF_2024                -0.2905+-0.9585    -0.2330+-0.9843     0.060      1.027
+
+wrote Comparison_250826_preUnblinding/compare/orig_CRo_legA.csv

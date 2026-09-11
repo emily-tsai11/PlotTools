@@ -1,0 +1,26 @@
+383 shared parameters, 67 combine-only, 0 rabbit-only
+  combine-only: ['prop_binVcb_cat2B_CR_bin0', 'prop_binVcb_cat2B_CR_bin1', 'prop_binVcb_cat2B_CR_bin2', 'prop_binVcb_cat2B_CR_bin3', 'prop_binVcb_cat2B_CR_bin4', 'prop_binVcb_cat2B_CR_bin5', 'prop_binVcb_cat2B_CR_bin6', 'prop_binVcb_cat2B_CR_bin7', 'prop_binVcb_cat2C_CR_bin0', 'prop_binVcb_cat2C_CR_bin1', 'prop_binVcb_cat2C_CR_bin2', 'prop_binVcb_cat2C_CR_bin3'] ...
+
+  |dvalue|/sigma : max 0.000  median 0.0000
+  error ratio    : min 0.719  max 3.728  median 1.0000
+
+  15 parameters outside tolerance (dv/sigma > 0.05, |ratio-1| > 0.05)
+
+parameter                                         combine             rabbit   dv/sig  err ratio
+CMS_flavTag_JES_BBEC1_2024                0.0000+-0.7193     0.0000+-0.9976     0.000      1.387
+CMS_flavTag_JES_RelativeBal               0.0000+-0.8511     0.0000+-0.9937     0.000      1.167
+CMS_flavTag_JES_RelativeSample_2024       0.0000+-0.9496     0.0000+-0.9998     0.000      1.053
+CMS_flavTag_LHE_muF_zjets                 0.0000+-0.9210     0.0000+-0.9970     0.000      1.083
+CMS_flavTag_Stat_flavC_C1_2024            0.0000+-0.3830     0.0000+-0.3491     0.000      0.911
+CMS_flavTag_Stat_flavC_C2_2024            0.0000+-0.3091     0.0000+-0.2222     0.000      0.719
+CMS_flavTag_Stat_flavL_B0_2024            0.0000+-0.3847     0.0000+-0.3446     0.000      0.896
+CMS_flavTag_Stat_flavL_C4_2024            0.0000+-0.5915     0.0000+-0.5440     0.000      0.920
+jer                                       0.0000+-0.6004     0.0000+-0.9257     0.000      1.542
+jes_Absolute_2024                         0.0000+-0.9101     0.0000+-0.9690     0.000      1.065
+jes_BBEC1_2024                            0.0000+-0.2653     0.0000+-0.9890     0.000      3.728
+met                                       0.0000+-0.2829     0.0000+-0.9849     0.000      3.481
+xsec_tt2c                                 1.0000+-0.4902     1.0000+-0.4155     0.000      0.848
+xsec_ttLF                                 1.0000+-0.0773     1.0000+-0.0719     0.000      0.931
+xsec_ttbb                                 1.0000+-0.1280     1.0000+-0.1193     0.000      0.932
+
+wrote Comparison_250826_preUnblinding/compare/noFlavTagSymm_SR_legA.csv

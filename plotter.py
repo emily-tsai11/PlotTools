@@ -161,6 +161,7 @@ def stack_histograms(
             # Retrieve the systematic variation histograms
             found = True
 
+            # Make sure to just apply certain systematics to certain processes (basically, as in prepareDatacards.py)
             if syst.startswith("minorBkg") and not any(name in phys_process_name for name in minorBkg_components):
                 continue
             if syst.startswith("PS_fsr") and not any(name in phys_process_name for name in tt_components):

@@ -1,0 +1,3 @@
+[submodule "rabbit"]
+	path = rabbit
+	url = git@github.com:SWuchterl/rabbit.git

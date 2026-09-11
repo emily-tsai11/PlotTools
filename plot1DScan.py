@@ -144,7 +144,7 @@ axishist = plot.GetAxisHist(pads[0])
 
 axishist.SetMinimum(min(main_scan['graph'].GetY()))
 axishist.SetMaximum(args.y_max)
-axishist.GetYaxis().SetTitle("- 2 #Delta ln L")
+axishist.GetYaxis().SetTitle("- 2#Delta ln L")
 axishist.GetXaxis().SetTitle("%s" % fixed_name)
 
 new_min = axishist.GetXaxis().GetXmin()
