@@ -205,8 +205,8 @@ def process_tree(infile, outfile, tree_name, hist_configs, year, selections, eve
             weight_column = f"weight_{selection_name}_{syst}"
             if not "data" in infile and not "Data" in infile:
                 print(f"Event weight: {weight}")
-                #if "dps" in infile:
-                #    weight = weight + "*4.52"
+                if "dps" in infile:
+                    weight = weight + "*4.52"
                 df_weighted = df.Define(weight_column, weight)
             else:
                 df_weighted = df.Define(weight_column, "1.")  # Set collision data weight to 1

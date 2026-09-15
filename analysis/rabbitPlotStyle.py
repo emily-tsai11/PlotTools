@@ -20,8 +20,8 @@ COM = "13.6"
 
 
 def cms_label(ax, data, loc=2, **kwargs):
-    """CMS exp label ('Work in Progress'). data=False prepends 'Simulation'."""
-    hep.cms.label("Work in Progress", loc=loc, ax=ax, data=data, lumi=LUMI,
+    """CMS exp label ('Preliminary'). data=False prepends 'Simulation'."""
+    hep.cms.label("Preliminary", loc=loc, ax=ax, data=data, lumi=LUMI,
                   com=COM, **kwargs)
 
 
@@ -41,16 +41,16 @@ COLOURS = {
 # raw process -> plotted group, in stacking order (bottom to top).
 # (key into COLOURS, legend label, member raw processes)
 PROCESS_GROUPS = [
-    ("ttLF", r"$\mathrm{t\bar{t}}$ LF", ["ttLF"]),
-    ("tt2b", r"$\mathrm{t\bar{t}}$ 2b", ["tt2b", "tt2b-dps"]),
-    ("ttbb", r"$\mathrm{t\bar{t}}$ bb", ["ttbb", "ttbb-dps"]),
-    ("ttbj", r"$\mathrm{t\bar{t}}$ bj", ["ttbj", "ttbj-dps"]),
-    #("tt2b", r"$\mathrm{t\bar{t}}$ 2b", ["tt2b"]),
-    #("ttbb", r"$\mathrm{t\bar{t}}$ bb", ["ttbb"]),
-    #("ttbj", r"$\mathrm{t\bar{t}}$ bj", ["ttbj"]),
-    ("tt2c", r"$\mathrm{t\bar{t}}$ 2c", ["tt2c"]),
-    ("ttcc", r"$\mathrm{t\bar{t}}$ cc", ["ttcc"]),
-    ("ttcj", r"$\mathrm{t\bar{t}}$ cj", ["ttcj"]),
+    ("ttLF", r"$\mathrm{t\bar{t}}$+LF", ["ttLF"]),
+    ("tt2b", r"$\mathrm{t\bar{t}}+j_{bb}$", ["tt2b", "tt2b-dps"]),
+    ("ttbb", r"$\mathrm{t\bar{t}}+j_{b}j_{b}$", ["ttbb", "ttbb-dps"]),
+    ("ttbj", r"$\mathrm{t\bar{t}}+j_{b}$", ["ttbj", "ttbj-dps"]),
+    #("tt2b", r"$\mathrm{t\bar{t}}+j_{bb}$", ["tt2b"]),
+    #("ttbb", r"$\mathrm{t\bar{t}}+j_{b}j_{b}$", ["ttbb"]),
+    #("ttbj", r"$\mathrm{t\bar{t}}+j_{b}$", ["ttbj"]),
+    ("tt2c", r"$\mathrm{t\bar{t}}+j_{cc}$", ["tt2c"]),
+    ("ttcc", r"$\mathrm{t\bar{t}}+j_{c}j_{c}$", ["ttcc"]),
+    ("ttcj", r"$\mathrm{t\bar{t}}+j_{c}$", ["ttcj"]),
     ("ttWcb", r"$\mathrm{t\bar{t}}$ (Vcb)", ["tt-vcb"]),
     # everything else: single top, W+jets, ttZ/ttW, diboson, ttH
     ("others", "Other bkg.", ["singletop", "wjets", "ttZ", "ttW", "diboson",
@@ -64,12 +64,12 @@ GROUP_COLORS = {label: COLOURS[key] for key, label, _ in PROCESS_GROUPS}
 # stack plot.
 REGION_LABELS = {
     "Vcb_catWcb_SR": "SR",
-    "Vcb_catBB_CR": r"$\mathrm{t\bar{t}}$+bb CR",
-    "Vcb_catBJ_CR": r"$\mathrm{t\bar{t}}$+bj CR",
-    "Vcb_cat2B_CR": r"$\mathrm{t\bar{t}}$+2b CR",
-    "Vcb_catCC_CR": r"$\mathrm{t\bar{t}}$+cc CR",
-    "Vcb_catCJ_CR": r"$\mathrm{t\bar{t}}$+cj CR",
-    "Vcb_cat2C_CR": r"$\mathrm{t\bar{t}}$+2c CR",
+    "Vcb_catBB_CR": r"$\mathrm{t\bar{t}}+j_{b}j_{b}$ CR",
+    "Vcb_catBJ_CR": r"$\mathrm{t\bar{t}}+j_{b}$ CR",
+    "Vcb_cat2B_CR": r"$\mathrm{t\bar{t}}+j_{bb}$ CR",
+    "Vcb_catCC_CR": r"$\mathrm{t\bar{t}}+j_{c}j_{c}$ CR",
+    "Vcb_catCJ_CR": r"$\mathrm{t\bar{t}}+j_{c}$ CR",
+    "Vcb_cat2C_CR": r"$\mathrm{t\bar{t}}+j_{cc}$ CR",
     "Vcb_catLF_CR": r"$\mathrm{t\bar{t}}$+LF CR",
 }
 

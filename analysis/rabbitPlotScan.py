@@ -66,18 +66,21 @@ def read_combine(path, param):
     return x[o], 2.0 * d[o]
 
 
+POI_DISPLAY = {"tt-vcb": r"$|V_{cb}|^{2}$"}
+
+
 def draw(path, name, x, y, hesse, title, combine=None, statonly=None, asimov=False):
+    disp = POI_DISPLAY.get(name, name)
     best = x[np.argmin(y)]
     lo1, hi1 = crossing(x, y, best, 1.0)
     lo2, hi2 = crossing(x, y, best, 4.0)
 
     fig, a = plt.subplots(figsize=(10, 9), dpi=160)
     a.grid(True, lw=0.5, alpha=0.35, zorder=0)
-    lbl = "Rabbit (stat+syst)" if statonly is not None else "Rabbit"
-    a.plot(x, y, color="#1f4fd8", lw=2.2, label=lbl, zorder=3)
+    a.plot(x, y, color="#1f4fd8", lw=2.2, label="Stat+Syst", zorder=3)
     if statonly is not None:
         sx, sy = statonly
-        a.plot(sx, sy, color="#e08a00", lw=2.0, ls="--", label="Rabbit (stat only)",
+        a.plot(sx, sy, color="#e08a00", lw=2.0, ls="--", label="Stat",
                zorder=3)
         sbest = sx[np.argmin(sy)]
         slo1, shi1 = crossing(sx, sy, sbest, 1.0)
@@ -94,39 +97,37 @@ def draw(path, name, x, y, hesse, title, combine=None, statonly=None, asimov=Fal
         if np.isfinite(v):
             a.plot([v, v], [0, 1.0], color="#888888", lw=1.0, zorder=1)
 
-    a.set_xlabel(name, fontsize=18)
+    a.set_xlabel(disp, fontsize=18)
     a.set_ylabel(r"$2\,\Delta\mathrm{NLL}$", fontsize=18)
-    a.set_ylim(0, min(9.0, float(np.nanmax(y)) * 1.05))
-    a.set_xlim(x.min(), x.max())
+    ytop = min(9.0, float(np.nanmax(y)) * 1.05)
+    a.set_ylim(0, ytop)
+    a.set_xlim(min(0.0, x.min()), x.max())
 
+    txt_x = 0.20  # near the parabola axis, clear of the rising curve arms
     up = hi1 - best if np.isfinite(hi1) else np.nan
     dn = best - lo1 if np.isfinite(lo1) else np.nan
-    head = f"{name} = {best:.4f}  $-{dn:.4f}/+{up:.4f}$" if np.isfinite(up + dn) \
-        else f"{name} = {best:.4f}  (1 sigma outside the scan range)"
-    a.text(0.04, 0.66, head, transform=a.transAxes, ha="left", va="top", fontsize=14,
-           fontweight="bold")
-    sub = f"Hessian $\\pm${hesse:.4f}" if np.isfinite(hesse) else ""
-    if np.isfinite(lo2) and np.isfinite(hi2):
-        sub += f"     2$\\sigma$ [{lo2:.4f}, {hi2:.4f}]"
+    head = f"{disp} = {best:.4f}  $-{dn:.4f}/+{up:.4f}$" if np.isfinite(up + dn) \
+        else f"{disp} = {best:.4f}  (1 sigma outside the scan range)"
+    a.text(txt_x, 0.66, head, transform=a.transAxes, ha="left", va="top", fontsize=14,
+           fontweight="bold", color="#1f4fd8")
+    sub = f"2$\\sigma$ [{lo2:.4f}, {hi2:.4f}]" if np.isfinite(lo2) and np.isfinite(hi2) else ""
     if sub:
-        a.text(0.04, 0.60, sub, transform=a.transAxes, ha="left", va="top",
+        a.text(txt_x, 0.615, sub, transform=a.transAxes, ha="left", va="top",
                fontsize=11, color="#555555")
     if statonly is not None:
         su = shi1 - sbest if np.isfinite(shi1) else np.nan
         sd = sbest - slo1 if np.isfinite(slo1) else np.nan
         stxt = f"stat. only  $-{sd:.4f}/+{su:.4f}$" if np.isfinite(su + sd) \
             else "stat. only  (1 sigma outside the scan range)"
-        a.text(0.04, 0.54, stxt, transform=a.transAxes, ha="left", va="top",
+        a.text(txt_x, 0.60, stxt, transform=a.transAxes, ha="left", va="top",
                fontsize=11, color="#e08a00")
-    if title:
-        a.text(0.04, 0.48 if statonly is not None else 0.54, title,
-               transform=a.transAxes, ha="left", va="top", fontsize=11, color="#555555")
     if combine is not None:
         cu = chi - cbest if np.isfinite(chi) else np.nan
         cd = cbest - clo if np.isfinite(clo) else np.nan
         a.text(0.5, -0.14, f"Combine: {cbest:.4f}  $-{cd:.4f}/+{cu:.4f}$",
                transform=a.transAxes, ha="center", fontsize=11, color="#cc2222")
-    a.legend(fontsize=12, frameon=False, loc="upper right")
+    a.legend(fontsize=12 * 1.4, frameon=False, loc="center right",
+             bbox_to_anchor=(0.98, 2.5 / ytop), bbox_transform=a.transAxes)
     cms_label(a, data=not asimov)
 
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
