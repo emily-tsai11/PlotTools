@@ -131,7 +131,7 @@ def main():
             if args.plots:
                 sfx = f"{ctag}_{cfg}_{leg}"
                 draw(os.path.join(plotdir, f"scan_{name}_{sfx}.png"), name,
-                     rx, ry, np.nan, sfx, combine=comb, asimov=(cfg == "SR"))
+                     rx, rx, ry, np.nan, sfx, False, combine=comb, asimov=(cfg == "SR"))
 
     w = 78
     print("=" * w)

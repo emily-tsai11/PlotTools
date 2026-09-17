@@ -3,7 +3,7 @@
 INPUT_DIR=/eos/cms/store/cmst3/group/top/rsalvatico/Vcb_analysis_07042026_2024_1L_Wcb/
 PROD_VERSION=07042026
 CONFIG_FILE=configs/hconfig.csv
-EXTRA_NAME=preselection_ge2bge1c_new2024FlavTagSFs
+EXTRA_NAME=preselection_correctTTweights_newTTBB/
 
 YEAR=2024
 
@@ -14,7 +14,7 @@ YEAR=2024
 #categories=(ttbb tt2b ttbj ttcc tt2c ttcj ttLF)
 #
 #cat=ttbj
-#EXTRA_NAME=CR_${cat}_selection_ge2bge1c_lepEta_5FS
+#EXTRA_NAME=CR_${cat}_selection_ge2bge1c_lepEta_rescaledDPS_corrected
 #OUTPUT_DIR=histos_$PROD_VERSION/$EXTRA_NAME/
 #parts=()
 #for other in "${categories[@]}"; do
@@ -27,8 +27,13 @@ YEAR=2024
 OUTPUT_DIR=histos_$PROD_VERSION/$EXTRA_NAME/
 FLAVTAG_SF_JSON=$CMSSW_BASE/src/PhysicsTools/NanoTTH/data/flavTagSF/flavTaggingSF_2024.json.gz
 
-python3 hdumper.py --input_dirs $INPUT_DIR/mc/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --flavtag_sf_json $FLAVTAG_SF_JSON
-python3 hdumper.py --input_dirs $INPUT_DIR/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --flavtag_sf_json $FLAVTAG_SF_JSON
+python3 hdumper.py --input_dirs $INPUT_DIR/mc/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --flavtag_sf_json $FLAVTAG_SF_JSON --systematics #--add_selection "$EXTRA_SELECTION && $conditions" 
+python3 hdumper.py --input_dirs $INPUT_DIR/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --flavtag_sf_json $FLAVTAG_SF_JSON --systematics #--add_selection "$EXTRA_SELECTION && $conditions"
+
+#python3 hdumper.py --input_dirs /eos/cms/store/group/phys_top/Run3Vcb/20260914_trees/customMC_2024_1L_Wcb/LHEWeight/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR 
+#python3 hdumper.py --input_dirs /eos/cms/store/group/phys_top/Run3Vcb/20260904_trees/customMC_ttbb_2024_1L_Wcb/LHEWeight/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR 
+#python3 hdumper.py --input_dirs /eos/cms/store/group/phys_top/Run3Vcb/20260904_trees/customMCV2_2024_1L_Wcb/LHEWeight/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR
+#python3 hdumper.py --input_dirs /eos/cms/store/cmst3/group/top/rsalvatico/Vcb_analysis_04092026_2024_1L_Wcb/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR 
 
 #python3 hdumper.py --input_dirs $INPUT_DIR/mc/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --add_selection "$EXTRA_SELECTION && $conditions" --systematics --use5FS
 #python3 hdumper.py --input_dirs $INPUT_DIR/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --add_selection "$EXTRA_SELECTION && $conditions" --systematics --use5FS

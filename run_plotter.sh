@@ -1,14 +1,14 @@
 #!/bin/sh
 # Preselection score
-PROD_VERSION=07042026
-#EXTRA_NAME=CR_ttbb_selection_ge2bge1c_lepEta_muon
-EXTRA_NAME=preselection_withSysts/
+PROD_VERSION=04092026
+EXTRA_NAME=preselection
+#EXTRA_NAME=preselection_withSysts/
 INPUT_DIR=histos_$PROD_VERSION/$EXTRA_NAME/
 OUTPUT_DIR=plots_$PROD_VERSION/$EXTRA_NAME/
-#EXTRA_PATH=CR_ttbb_selection_ge2bge1c_lepEta_muon
-EXTRA_PATH=preselection_withSysts/
-SIG_NORM=5
-CONFIG_FILE=configs/hconfig_reducedANplots.csv
+EXTRA_PATH=preselection
+#EXTRA_PATH=preselection_withSysts/
+SIG_NORM=100
+CONFIG_FILE=configs/hconfig.csv
 
 mkdir -p $OUTPUT_DIR/log
 python3 /eos/user/e/etsai/www/.bin/pb_copy_index.py -r /eos/user/e/etsai/www/V_cbMeasurement/analysis/plots_$PROD_VERSION/$EXTRA_NAME/
