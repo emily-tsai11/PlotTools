@@ -462,7 +462,7 @@ def plot_purity_multiregion(input_files, output_dir, raw_evt_number=False):
             continue
 
         if "h_QCD" in infile:
-            continue #Skip QCD multijet for now
+            continue # Skip QCD multijet for now
 
         # Open the file
         root_file = ROOT.TFile.Open(infile)
@@ -501,7 +501,7 @@ def plot_purity_multiregion(input_files, output_dir, raw_evt_number=False):
                 print(f"Integral of {hist_name} in {infile}: {hist_clone.Integral()}")
             process[hist_name][1] += hist_clone.Integral()
             print(f"Total integral of {hist_name}: {process[hist_name][1]}")
-        
+
 
     labels_CR = [key for key in process.keys() if ('CR' in key) and ('fscore' not in key)]
     labels_fscores = [key for key in process.keys() if 'fscore' in key or "Wcb_CR" in key]
@@ -528,16 +528,17 @@ def plot_purity_multiregion(input_files, output_dir, raw_evt_number=False):
     labels = [label.replace('ttcc', r'$\mathrm{t\bar{t}}+j_{c}j_{c}$') for label in labels]  # Replace 'ttcc' with 'tt+j_c j_c'
     labels = [label.replace('tt2c', r'$\mathrm{t\bar{t}}+j_{cc}$') for label in labels]  # Replace 'tt2c' with 'tt+j_cc'
     labels = [label.replace('ttcj', r'$\mathrm{t\bar{t}}+j_{c}$') for label in labels]  # Replace 'ttcj' with 'tt+j_c'
-    
+
 
     x = np.arange(len(labels))  # the label locations
     width = 0.35  # the width of the bars
 
     fig, ax = plt.subplots(figsize=(10, 10))
     hep.cms.label("Preliminary", loc=2, ax=ax, lumi="110", com="13.6")
-    bars_CR = ax.bar(x - width/3, values_CR, width, label='CR')
-    bars_fscores = ax.bar(x, values_CR_fscores, width, label='CR-fscores')
-    bars_SR = ax.bar(x + width/3, values_SR, width, label='SR')
+    # bars_CR = ax.bar(x - width/3, values_CR, width, label='CR', color='#5790fc')
+    # bars_fscores = ax.bar(x, values_CR_fscores, width, label='CR-fscores', color='#f89c20')
+    bars_fscores = ax.bar(x, values_CR_fscores, width, label='CR', color='#f89c20')
+    bars_SR = ax.bar(x + width/3, values_SR, width, label='SR', color='#e42536')
 
 
     # Add legend and move it down

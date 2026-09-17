@@ -1,11 +1,11 @@
 #!/bin/sh
 PROD_VERSION=20260407_withLHEScale
-EXTRA_NAME=preselection_ge2bge1c_ttLFm0p1_fscores_withSysts
+EXTRA_NAME=preselection_ge2bge1c_ttLFm0p1_withSysts
 # EXTRA_PATH1=unstacked
 # EXTRA_PATH2=unstacked/ttLFm0p1
 # EXTRA_PATH3=purity/ttLFm0p1_and_classification_cuts
 # EXTRA_PATH4=FS_vs_score
-INPUT_DIR=/eos/cms/store/user/etsai/storage/V_cbMeasurement/PlotTools/histos_$PROD_VERSION/$EXTRA_NAME/
+INPUT_DIR=/afs/cern.ch/user/r/rselvati/public/forEmily/
 OUTPUT_DIR=/eos/user/e/etsai/www/V_cbMeasurement/analysis/plots_$PROD_VERSION/$EXTRA_NAME/
 
 # Unstacked scores for signal, ttLF, total background
