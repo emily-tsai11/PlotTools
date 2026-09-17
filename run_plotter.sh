@@ -10,8 +10,11 @@ EXTRA_PATH=preselection_withSysts/
 SIG_NORM=5
 CONFIG_FILE=configs/hconfig_reducedANplots.csv
 
-python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_norm $SIG_NORM --input_csv $CONFIG_FILE --blind
-python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_norm $SIG_NORM --input_csv $CONFIG_FILE --blind --log
+mkdir -p $OUTPUT_DIR/log
+python3 /eos/user/e/etsai/www/.bin/pb_copy_index.py -r /eos/user/e/etsai/www/V_cbMeasurement/analysis/plots_$PROD_VERSION/$EXTRA_NAME/
+
+time python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_norm $SIG_NORM --input_csv $CONFIG_FILE --blind
+time python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_norm $SIG_NORM --input_csv $CONFIG_FILE --blind --log
 
 #python3 plotter.py --input_dir histos_07012026/ttLFm0p1/allPlots/ --output_dir plots_07012026/ttLFm0p1_ttWcbm0p7/allPlots/ --sig_norm $SIG_NORM --input_csv configs/hconfig.csv --blind
 #python3 plotter.py --input_dir histos_07012026/ttLFm0p1/allPlots/ --output_dir plots_07012026/ttLFm0p1_ttWcbm0p7/allPlots/ --sig_norm $SIG_NORM --input_csv configs/hconfig.csv --blind --log
