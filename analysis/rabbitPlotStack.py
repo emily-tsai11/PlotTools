@@ -113,8 +113,8 @@ def draw(path, stack, total, err, data, bounds, channels, fittype, logy,
             ax.axvline(b, color="k", lw=0.8, ls="--", alpha=0.5)
     lo = 0
     for b, ch in zip(bounds, channels):
-        a.text((lo + b) / 2, 0.74, region_label(ch), transform=
-               a.get_xaxis_transform(), ha="center", va="top", fontsize=11.7,
+        a.text((lo + b) / 2, 0.78, region_label(ch), transform=
+               a.get_xaxis_transform(), ha="center", va="top", fontsize=14.04,
                rotation=90, color="#333333")
         lo = b
 
@@ -137,9 +137,9 @@ def draw(path, stack, total, err, data, bounds, channels, fittype, logy,
     spread = max([0.0] + [np.nanmax(a_) for a_ in (resid, band, *extra) if a_.size])
     half = max(spread * 1.35, 0.05)
     r.set_ylim(1 - half, 1 + half)
-    r.set_ylabel("Data / pred.", fontsize=17)
-    r.set_xlabel("Unrolled bin (category boundaries dashed)", fontsize=17)
-    a.set_ylabel("Events", fontsize=17)
+    r.set_ylabel("Data / pred.", fontsize=18.7)
+    r.set_xlabel("Unrolled bin (category boundaries dashed)", fontsize=18.7)
+    a.set_ylabel("Events", fontsize=18.7)
     a.set_xlim(0, n)
 
     handles, hlabels = a.get_legend_handles_labels()
@@ -154,7 +154,7 @@ def draw(path, stack, total, err, data, bounds, channels, fittype, logy,
              edgecolor="none", loc="upper left", bbox_to_anchor=(0.01, 0.995))
 
     cms_label(a, data=not asimov, loc=0)
-    a.text(0.98, 0.96, "Post-fit" if fittype == "postfit" else "Pre-fit",
+    a.text(0.995, 0.96, "Post-fit" if fittype == "postfit" else "Pre-fit",
            transform=a.transAxes, ha="right", va="top", fontsize=13,
            fontweight="bold", color="#222222")
 

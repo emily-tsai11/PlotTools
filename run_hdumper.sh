@@ -1,9 +1,9 @@
 #!/bin/sh
 # This script is used to run the hdumper to make histograms
 INPUT_DIR=/eos/cms/store/cmst3/group/top/rsalvatico/Vcb_analysis_07042026_2024_1L_Wcb/
-PROD_VERSION=testnewjerapplication
+PROD_VERSION=07042026
 CONFIG_FILE=configs/hconfig.csv
-EXTRA_NAME=preselection
+EXTRA_NAME=preselection_correctTTweights_newTTBB/
 
 YEAR=2024
 
@@ -25,12 +25,12 @@ YEAR=2024
 #
 #EXTRA_SELECTION="score_ttLF < 0.1 && score_tt_Wcb < 0.8"
 OUTPUT_DIR=histos_$PROD_VERSION/$EXTRA_NAME/
-#FLAVTAG_SF_JSON=$CMSSW_BASE/src/PhysicsTools/NanoTTH/data/flavTagSF/flavTaggingSF_2024.json.gz
+FLAVTAG_SF_JSON=$CMSSW_BASE/src/PhysicsTools/NanoTTH/data/flavTagSF/flavTaggingSF_2024.json.gz
 
-#python3 hdumper.py --input_dirs $INPUT_DIR/mc/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR #--add_selection "$EXTRA_SELECTION && $conditions" 
-#python3 hdumper.py --input_dirs $INPUT_DIR/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR #--add_selection "$EXTRA_SELECTION && $conditions"
+python3 hdumper.py --input_dirs $INPUT_DIR/mc/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --flavtag_sf_json $FLAVTAG_SF_JSON --systematics #--add_selection "$EXTRA_SELECTION && $conditions" 
+python3 hdumper.py --input_dirs $INPUT_DIR/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR --flavtag_sf_json $FLAVTAG_SF_JSON --systematics #--add_selection "$EXTRA_SELECTION && $conditions"
 
-python3 hdumper.py --input_dirs /eos/cms/store/group/phys_top/Run3Vcb/20260914_trees/customMC_2024_1L_Wcb/LHEWeight/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR 
+#python3 hdumper.py --input_dirs /eos/cms/store/group/phys_top/Run3Vcb/20260914_trees/customMC_2024_1L_Wcb/LHEWeight/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR 
 #python3 hdumper.py --input_dirs /eos/cms/store/group/phys_top/Run3Vcb/20260904_trees/customMC_ttbb_2024_1L_Wcb/LHEWeight/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR 
 #python3 hdumper.py --input_dirs /eos/cms/store/group/phys_top/Run3Vcb/20260904_trees/customMCV2_2024_1L_Wcb/LHEWeight/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR
 #python3 hdumper.py --input_dirs /eos/cms/store/cmst3/group/top/rsalvatico/Vcb_analysis_04092026_2024_1L_Wcb/data/ --output_dir $OUTPUT_DIR --tree_name Events --input_csv $CONFIG_FILE --year $YEAR 
