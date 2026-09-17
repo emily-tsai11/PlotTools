@@ -1,0 +1,13 @@
+executable            = submit.sh
+request_cpus          = 32
+output                = logs/submit.$(ClusterId).$(ProcId).out
+error                 = logs/submit.$(ClusterId).$(ProcId).err
+log                   = logs/submit.$(ClusterId).$(ProcId).log
+use_x509userproxy     = true
+should_transfer_files = YES
+WhenToTransferOutput  = ON_EXIT
+want_graceful_removal = true
+
++JobFlavour = "nextweek"
+
+queue

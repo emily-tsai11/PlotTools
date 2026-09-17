@@ -1,20 +1,30 @@
 #!/bin/sh
+
 # Preselection score
-PROD_VERSION=04092026
-EXTRA_NAME=preselection
-#EXTRA_NAME=preselection_withSysts/
-INPUT_DIR=histos_$PROD_VERSION/$EXTRA_NAME/
-OUTPUT_DIR=plots_$PROD_VERSION/$EXTRA_NAME/
-EXTRA_PATH=preselection
-#EXTRA_PATH=preselection_withSysts/
-SIG_NORM=100
-CONFIG_FILE=configs/hconfig.csv
+PROD_VERSION=07042026_withLHEScale
+# EXTRA_NAME=CR_ttbb_selection_ge2bge1c_lepEta_muon
+# EXTRA_NAME=preselection_ge2bge1c_withSysts
+# EXTRA_NAME=preselection_ge2bge1c_ttLFm0p1_withSysts
+EXTRA_NAME=preselection_ge2bge1c_ttLFm0p1_fscores_withSysts
+INPUT_DIR=/eos/cms/store/user/etsai/storage/V_cbMeasurement/PlotTools/histos_$PROD_VERSION/$EXTRA_NAME/
+OUTPUT_DIR=/eos/user/e/etsai/www/V_cbMeasurement/analysis/plots_$PROD_VERSION/$EXTRA_NAME/
+#EXTRA_PATH=CR_ttbb_selection_ge2bge1c_lepEta_muon
+# EXTRA_PATH=preselection_withSysts/
+SIG_NORM=5
+CONFIG_FILE=configs/hconfig_minimal.csv
+# CONFIG_FILE=configs/hconfig_ANplots.csv
+# CONFIG_FILE=configs/hconfig_fscores.csv
 
 mkdir -p $OUTPUT_DIR/log
 python3 /eos/user/e/etsai/www/.bin/pb_copy_index.py -r /eos/user/e/etsai/www/V_cbMeasurement/analysis/plots_$PROD_VERSION/$EXTRA_NAME/
 
-time python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_norm $SIG_NORM --input_csv $CONFIG_FILE --blind
-time python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_norm $SIG_NORM --input_csv $CONFIG_FILE --blind --log
+
+
+time python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_norm $SIG_NORM --input_csv $CONFIG_FILE
+time python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_norm $SIG_NORM --input_csv $CONFIG_FILE --log
+python3 /eos/user/e/etsai/www/.bin/pb_copy_index.py -r /eos/user/e/etsai/www/V_cbMeasurement/analysis/plots_$PROD_VERSION/
+
+
 
 #python3 plotter.py --input_dir histos_07012026/ttLFm0p1/allPlots/ --output_dir plots_07012026/ttLFm0p1_ttWcbm0p7/allPlots/ --sig_norm $SIG_NORM --input_csv configs/hconfig.csv --blind
 #python3 plotter.py --input_dir histos_07012026/ttLFm0p1/allPlots/ --output_dir plots_07012026/ttLFm0p1_ttWcbm0p7/allPlots/ --sig_norm $SIG_NORM --input_csv configs/hconfig.csv --blind --log
@@ -37,9 +47,9 @@ time python3 plotter.py --input_dir $INPUT_DIR --output_dir $OUTPUT_DIR --sig_no
 #python3 plotter.py --input_dir histos_centralVcb/fscores_ttLFm0p1_rebinned/ --output_dir plots_centralVcb/fscores_ttLFm0p1_rebinned/ --sig_norm $SIG_NORM --input_csv configs/hconfig_fscores.csv --blind --log
 
 # Copy the plots to the appropriate web area
-mkdir -p /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/$EXTRA_PATH/log/
-cp /eos/user/r/rselvati/www/index.php /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/
-cp /eos/user/r/rselvati/www/index.php /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/$EXTRA_PATH/
-cp /eos/user/r/rselvati/www/index.php /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/$EXTRA_PATH/log/
-cp $OUTPUT_DIR/* /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/$EXTRA_PATH/
-cp $OUTPUT_DIR/log/* /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/$EXTRA_PATH/log/
+# mkdir -p /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/$EXTRA_PATH/log/
+# cp /eos/user/r/rselvati/www/index.php /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/
+# cp /eos/user/r/rselvati/www/index.php /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/$EXTRA_PATH/
+# cp /eos/user/r/rselvati/www/index.php /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/$EXTRA_PATH/log/
+# cp $OUTPUT_DIR/* /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/$EXTRA_PATH/
+# cp $OUTPUT_DIR/log/* /eos/user/r/rselvati/www/Vcb/Run3/$PROD_VERSION/$EXTRA_PATH/log/

@@ -1,2 +1,2 @@
 Variable, nbins, xmin, xmax
-lep1_eta, 48, -2.4, 2.4
+score_tt_Wcb, 100, 0., 1.
