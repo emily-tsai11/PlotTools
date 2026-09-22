@@ -163,8 +163,8 @@ def draw(path, name, x, x_sqrt, y, hesse, title, is_poi, combine=None, statonly=
         cbest = cx[np.argmin(cy)]
         clo, chi = crossing(cx, cy, cbest, 1.0)
 
-    a.set_xlabel(disp, fontsize=18)
-    a.set_ylabel(r"$2\,\Delta\mathrm{NLL}$", fontsize=18)
+    a.set_xlabel(disp, fontsize=18 * 1.2)
+    a.set_ylabel(r"$2\,\Delta\mathrm{NLL}$", fontsize=18 * 1.2)
     ytop = min(9.0, float(np.nanmax(y)) * 1.05)
     a.set_ylim(0, ytop)
     xhi = max(xhi_candidates) * 1.2
@@ -173,25 +173,41 @@ def draw(path, name, x, x_sqrt, y, hesse, title, is_poi, combine=None, statonly=
 
     for lvl, lab, c in ((1.0, r"1$\,\sigma$", "#888888"), (4.0, r"2$\,\sigma$", "#bbbbbb")):
         a.axhline(lvl, color=c, lw=1.0, zorder=1)
-        a.text(xhi, lvl, f" {lab}", va="center", ha="left", fontsize=13, color=c)
+        a.text(xhi, lvl, f" {lab}", va="center", ha="left", fontsize=13 * 2, color=c)
     for v in (lo1, hi1):
         if np.isfinite(v):
             a.plot([v, v], [0, 1.0], color="#888888", lw=1.0, zorder=1)
 
-    txt_x = 0.24  # near the parabola axis, clear of the rising curve arms
+    # central legend: label at txt_x, uncertainty numbers at the shared num_x
+    # so the stat+syst and stat-only lines line up in a column. num_x is
+    # measured off the actually-rendered label widths (font size and label
+    # text both vary), not guessed, so the numbers never overlap the labels.
+    txt_x = 0.28
+    head_fs, stat_fs = 14 * 1.2, 11 * 1.3 * 1.2
     up = hi1 - best if np.isfinite(hi1) else np.nan
     dn = best - lo1 if np.isfinite(lo1) else np.nan
-    head = f"{disp} = {best:.4f}  $-{dn:.4f}/+{up:.4f}$" if np.isfinite(up + dn) \
-        else f"{disp} = {best:.4f}  (1 sigma outside the scan range)"
-    a.text(txt_x, 0.66, head, transform=a.transAxes, ha="left", va="top", fontsize=14,
-           fontweight="bold", color="#1f4fd8")
+    head_lbl = a.text(txt_x, 0.66, f"{disp} = {best:.3f}", transform=a.transAxes,
+                       ha="left", va="top", fontsize=head_fs, color="#1f4fd8")
+    labels = [head_lbl]
+    if statonly is not None:
+        labels.append(a.text(txt_x, 0.60, "stat. only", transform=a.transAxes,
+                              ha="left", va="top", fontsize=stat_fs, color="#e08a00"))
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    num_x = max(t.get_window_extent(renderer=renderer)
+                .transformed(a.transAxes.inverted()).x1 for t in labels) + 0.02
+
+    head_num = f"$-{dn:.3f}/+{up:.3f}$" if np.isfinite(up + dn) \
+        else "(1 sigma outside the scan range)"
+    a.text(num_x, 0.66, head_num, transform=a.transAxes, ha="left", va="top",
+           fontsize=head_fs, color="#1f4fd8")
     if statonly is not None:
         su = shi1 - sbest if np.isfinite(shi1) else np.nan
         sd = sbest - slo1 if np.isfinite(slo1) else np.nan
-        stxt = f"stat. only  $-{sd:.4f}/+{su:.4f}$" if np.isfinite(su + sd) \
-            else "stat. only  (1 sigma outside the scan range)"
-        a.text(txt_x, 0.60, stxt, transform=a.transAxes, ha="left", va="top",
-               fontsize=11 * 1.3, color="#e08a00")
+        stat_num = f"$-{sd:.3f}/+{su:.3f}$" if np.isfinite(su + sd) \
+            else "(1 sigma outside the scan range)"
+        a.text(num_x, 0.60, stat_num, transform=a.transAxes, ha="left", va="top",
+               fontsize=stat_fs, color="#e08a00")
     if combine is not None:
         cu = chi - cbest if np.isfinite(chi) else np.nan
         cd = cbest - clo if np.isfinite(clo) else np.nan

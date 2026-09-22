@@ -16,18 +16,32 @@ Vcb_gen = 0.0411  # PDG 2025 eq. 76.3, per xsec_run3.conf:149
 
 # Rescaled DPS and muR in ttbb, tt2b, ttbj
 r = 0.837
-r_minus = 0.281
-r_plus = 0.281
+r_minus = 0.292
+r_plus = 0.280
+r_minus_stat_only = 0.163
+r_plus_stat_only = 0.167
 
 # Propagate the interval endpoints through Vcb(r) = Vcb_gen*sqrt(r) directly,
 # rather than linearizing (delta method) -- exact for a monotonic transform,
 # and captures the asymmetry that sqrt(r) introduces.
+
+r_minus_syst_only = np.sqrt(r_minus**2 - r_minus_stat_only**2)
+r_plus_syst_only = np.sqrt(r_plus**2 - r_plus_stat_only**2)
+
 Vcb_fit = Vcb_gen * np.sqrt(r)
 Vcb_up = Vcb_gen * np.sqrt(r + r_plus) - Vcb_fit
 Vcb_down = Vcb_fit - Vcb_gen * np.sqrt(r - r_minus)
 
-print(f"Vcb = {(Vcb_fit*1000):.5f}  +{Vcb_up*1000:.5f}  -{Vcb_down*1000:.5f}")
-print(f"Relative uncertainty: +{Vcb_up/Vcb_fit:.3%}  -{Vcb_down/Vcb_fit:.3%}")
+Vcb_up_stat_only = Vcb_gen * np.sqrt(r + r_plus_stat_only) - Vcb_fit
+Vcb_down_stat_only = Vcb_fit - Vcb_gen * np.sqrt(r - r_minus_stat_only)
+
+Vcb_up_syst_only = Vcb_gen * np.sqrt(r + r_plus_syst_only) - Vcb_fit
+Vcb_down_syst_only = Vcb_fit - Vcb_gen * np.sqrt(r - r_minus_syst_only)
+
+print()
+print(f"r = {r:.3f} +{r_plus_stat_only:.3f} -{r_minus_stat_only:.3f} (stat) +{r_plus_syst_only:.3f} -{r_minus_syst_only:.3f} (syst). Total uncertainty: +{r_plus:.3f} -{r_minus:.3f}\n")
+print(f"Vcb = {(Vcb_fit*100):.3f} +{Vcb_up_stat_only*100:.3f} -{Vcb_down_stat_only*100:.3f} (stat) +{Vcb_up_syst_only*100:.3f} -{Vcb_down_syst_only*100:.3f} (syst). Total uncertainty: +{Vcb_up*100:.3f} -{Vcb_down*100:.3f}\n")
+print(f"Relative uncertainty: +{Vcb_up/Vcb_fit:.2%}  -{Vcb_down/Vcb_fit:.2%}")
 
 # --- Alternative: full profile-likelihood scan (use if you have the grid scan
 # ROOT file and want the interval read off directly from 2*deltaNLL=1, which
