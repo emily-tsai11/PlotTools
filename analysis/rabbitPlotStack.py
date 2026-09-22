@@ -113,14 +113,14 @@ def draw(path, stack, total, err, data, bounds, channels, fittype, logy,
             ax.axvline(b, color="k", lw=0.8, ls="--", alpha=0.5)
     lo = 0
     for b, ch in zip(bounds, channels):
-        a.text((lo + b) / 2, 0.78, region_label(ch), transform=
+        a.text((lo + b) / 2, 0.79, region_label(ch), transform=
                a.get_xaxis_transform(), ha="center", va="top", fontsize=14.04,
                rotation=90, color="#333333")
         lo = b
 
     if logy:
         a.set_yscale("log")
-        a.set_ylim(max(1e-2, np.nanmin(total[total > 0]) * 0.2), np.nanmax(total) * 60)
+        a.set_ylim(max(1e-2, np.nanmin(total[total > 0]) * 0.2), np.nanmax(total) * 80)
     else:
         a.set_ylim(0, np.nanmax(np.where(ok, data, total)) * 1.6)
     # zoom the ratio panel to the actual spread: postfit bands/residuals are
@@ -138,7 +138,7 @@ def draw(path, stack, total, err, data, bounds, channels, fittype, logy,
     half = max(spread * 1.35, 0.05)
     r.set_ylim(1 - half, 1 + half)
     r.set_ylabel("Data / pred.", fontsize=18.7)
-    r.set_xlabel("Unrolled bin (category boundaries dashed)", fontsize=18.7)
+    r.set_xlabel("Event classifier score bins", fontsize=18.7)
     a.set_ylabel("Events", fontsize=18.7)
     a.set_xlim(0, n)
 
@@ -147,14 +147,18 @@ def draw(path, stack, total, err, data, bounds, channels, fittype, logy,
     n_groups = len(labels)
     handles = handles[:n_groups][::-1] + handles[n_groups:]
     hlabels = hlabels[:n_groups][::-1] + hlabels[n_groups:]
-    if prefit_total is not None:
-        handles.append(Line2D([0], [0], color="#cc2222", lw=1.5))
-        hlabels.append("Pre-fit data / pred.")
     a.legend(handles, hlabels, fontsize=15.6, ncol=6, frameon=True, framealpha=0.85,
              edgecolor="none", loc="upper left", bbox_to_anchor=(0.01, 0.995))
 
+    if prefit_total is not None:
+        # its own small legend in the ratio pad, sitting in the first CR's
+        # space, instead of crowding the upper pad's process legend.
+        first_cr_center = (bounds[0] + bounds[1]) / (2 * n)
+        r.legend(loc="upper center", bbox_to_anchor=(first_cr_center, 0.97),
+                 fontsize=12, frameon=True, framealpha=0.85, edgecolor="none")
+
     cms_label(a, data=not asimov, loc=0)
-    a.text(0.995, 0.96, "Post-fit" if fittype == "postfit" else "Pre-fit",
+    a.text(0.99, 0.96, "Post-fit" if fittype == "postfit" else "Pre-fit",
            transform=a.transAxes, ha="right", va="top", fontsize=13,
            fontweight="bold", color="#222222")
 

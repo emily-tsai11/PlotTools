@@ -1,6 +1,6 @@
 #!/bin/sh
 # Preselection score
-PROD_VERSION=04092026
+PROD_VERSION=APPROVAL
 EXTRA_NAME=preselection
 #EXTRA_NAME=preselection_withSysts/
 INPUT_DIR=histos_$PROD_VERSION/$EXTRA_NAME/
